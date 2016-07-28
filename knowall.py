@@ -62,7 +62,7 @@ def make_parser():
         return x
 
     group = parser.add_argument_group('required arguments')
-    group.add_argument("--mode", default=MODES[0],
+    group.add_argument("--mode", default=MODES[0].__name__,
         help="mode from list above", type=mode_check
     )
 
@@ -285,7 +285,7 @@ def dupes(opt):
         if opt.show_n and n+1 >= opt.show_n:
             break
 def main():
-    """main -
+    """main - tweak options are dispatch mode
     """
 
     opt = make_parser().parse_args()
