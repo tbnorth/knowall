@@ -13,7 +13,7 @@ python knowall.py --top-dir some/path > some_path.json
 python < some_path.json --mode dupes --show-n 5 
 
 # most common extensions on subpath
-python < some_path.json --mode rank_ext --directory-filter some/path/here
+python < some_path.json --mode rank_ext --path-filter some/path/here
 
 
 usage: knowall.py [-h] [--mode MODE] [--top-dir DIR] [--show-n N]
