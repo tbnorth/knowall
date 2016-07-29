@@ -4,28 +4,23 @@ Recursively stat's a directory hierarchy, dumping data to a file.
 Then analyses that data in different ways.
 
 ```
-# first collect data
-python knowall.py --top-dir some/path > some_path.json
-
-# then analyze
-
-# 5 largest dupes.
-python < some_path.json --mode dupes --show-n 5 
-
-# most common extensions on subpath
-python < some_path.json --mode rank_ext --path-filter some/path/here
-
-
 usage: knowall.py [-h] [--mode MODE] [--top-dir DIR] [--show-n N]
                   [--extensions EXT [EXT ...]] [--min-size BYTES]
                   [--max-size BYTES] [--path-filter REGEX]
-                  [--file-filter REGEX] [--dupes-sort-n] [--dupes-hash]
+                  [--file-filter REGEX] [--dupes-sort-n] [--dupes-no-hash]
 
-Recursively stat files
+Recursively stat files. e.g.
+
+    # first collect data
+    python knowall.py --top-dir some/path > some_path.json
+    # then analyze - 5 largest dupes.
+    python < some_path.json --mode dupes --show-n 5
+    # most common extensions on subpath
+    python < some_path.json --mode rank_ext --path-filter some/path/here
 
 Modes:
 
-  recur_stat: Recursively stat folder
+  recur_stat: Recursively stat folder, store this output for other modes
     find_ext: Find folders with files with listed extensions
     rank_ext: Rank extensions by popularity
      summary: Summary of files in data
@@ -49,9 +44,11 @@ optional arguments:
                         Use '^(?!.*<pattern>)' to exclude <pattern>, e.g.
                         --file-filter "^(?!.*(jpg|dat))" (default: None)
   --dupes-sort-n        sort dupe listing by count, not size (default: False)
-  --dupes-hash          hash possible dupes to check content, don't just use
-                        size (default: False)
+  --dupes-no-hash       don't hash possible dupes to check content, just use
+                        size. WARNING: may return false dupe listings
+                        (default: False)
 
 required arguments:
   --mode MODE           mode from list above (default: recur_stat)
 ```
+

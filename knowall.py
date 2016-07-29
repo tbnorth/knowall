@@ -23,6 +23,7 @@ FileInfo = namedtuple("FileInfo",
     'st_gid st_size st_atime st_mtime st_ctime')
 
 MODES = []
+
 def mode(func):
     """mode - decorator to collect modes
 
@@ -31,6 +32,7 @@ def mode(func):
 
     MODES.append(func)
     return func
+
 def uni(t):
     return unicode(t.decode('cp1252'))
 
@@ -41,7 +43,14 @@ class Formatter(
 def make_parser():
 
     description=[
-        "Recursively stat files\n",
+        "Recursively stat files. e.g.\n",
+        "    # first collect data\n"
+        "    python knowall.py --top-dir some/path > some_path.json\n"
+        "    # then analyze - 5 largest dupes.\n"
+        "    python < some_path.json --mode dupes --show-n 5 \n"
+        "    # most common extensions on subpath\n"
+        "    python < some_path.json --mode rank_ext --path-filter some/path/here\n\n"
+
         "Modes:\n"
     ]
 
@@ -90,11 +99,13 @@ def make_parser():
     parser.add_argument("--dupes-sort-n", default=False,
         action="store_true",
         help="sort dupe listing by count, not size")
-    parser.add_argument("--dupes-hash", default=False,
+    parser.add_argument("--dupes-no-hash", default=False,
         action="store_true",
-        help="hash possible dupes to check content, don't just use size")
+        help="don't hash possible dupes to check content, "
+             "just use size.  WARNING: may return false dupe listings")
 
     return parser
+
 def get_data(opt):
     """get_data - generator, read data, applying filters
 
@@ -119,6 +130,7 @@ def get_data(opt):
         ]
         if data['files'] or not filtered:
             yield data
+
 def get_hash(path):
     """get_hash - get hash for file
 
@@ -137,9 +149,10 @@ def get_hash(path):
         if len(data) != buff_size:
             break
     return digest.hexdigest()
+
 @mode
 def recur_stat(opt):
-    "Recursively stat folder"
+    "Recursively stat folder, store this output for other modes"
     count = 0
     for path, dirs, files in os.walk(opt.top_dir):
         out = {'path':uni(path), 'files':[]}
@@ -179,6 +192,7 @@ def find_ext(opt):
         writer.writerow(row)
         if opt.show_n and n+1 >= opt.show_n:
             break
+
 @mode
 def rank_ext(opt):
     "Rank extensions by popularity"
@@ -196,6 +210,7 @@ def rank_ext(opt):
     counts.sort(reverse=True)
     for i in counts[:opt.show_n] if opt.show_n else counts:
         print "% 5d %s" % tuple(i)
+
 @mode
 def summary(opt):
     "Summary of files in data"
@@ -212,6 +227,7 @@ def summary(opt):
 
     print "{dirs:,d} folders, {files:,d} files, {bytes:,d} bytes".format(
         dirs=dirs, files=files, bytes=bytes)
+
 @mode
 def dirs(opt):
     """Dumps dirs
@@ -223,6 +239,7 @@ def dirs(opt):
         print data['path']
         if opt.show_n and n+1 >= opt.show_n:
             break
+
 @mode
 def files(opt):
     """Dumps files
@@ -237,6 +254,7 @@ def files(opt):
             count += 1
             if opt.show_n and count == opt.show_n:
                 return
+
 @mode
 def dupes(opt):
     "Find duplicate files"
@@ -264,10 +282,10 @@ def dupes(opt):
         hashed = defaultdict(lambda: [])
         for path, filename in sizes[size]:
             filepath = os.path.join(path, filename)
-            if opt.dupes_hash:
-                hashtext = get_hash(filepath)
-            else:
+            if opt.dupes_no_hash:
                 hashtext = 'no-hash'
+            else:
+                hashtext = get_hash(filepath)
             hashed[(size, hashtext)].append(filepath)
 
         # filter out singles
@@ -284,6 +302,7 @@ def dupes(opt):
         # might overshoot, but better to show complete sets of dupes
         if opt.show_n and n+1 >= opt.show_n:
             break
+
 def main():
     """main - tweak options are dispatch mode
     """
@@ -297,5 +316,7 @@ def main():
                 re.compile(regex, flags=re.IGNORECASE))
 
     globals()[opt.mode](opt)
+
 if __name__ == '__main__':
     main()
+
