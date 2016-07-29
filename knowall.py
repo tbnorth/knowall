@@ -41,6 +41,12 @@ class Formatter(
     argparse.RawDescriptionHelpFormatter): pass
 
 def make_parser():
+    """
+    make_parser - make an argparse.ArgumentParser
+
+    :return: parser
+    :rtype: argparse.ArgumentParser
+    """
 
     description=[
         "Recursively stat files. e.g.\n",
@@ -106,6 +112,23 @@ def make_parser():
 
     return parser
 
+def get_options(args=None):
+    """
+    get_options - process arguments
+
+    :param [str] args: list of arguments
+    :return: options
+    :rtype: argparse.Namespace
+    """
+    opt = make_parser().parse_args(args)
+    opt.extensions = [i.upper() for i in opt.extensions]
+    for attr in 'file', 'path':
+        regex = getattr(opt, attr+'_filter')
+        if regex:
+            setattr(opt, attr+'_filter',
+                re.compile(regex, flags=re.IGNORECASE))
+    return opt
+
 def get_data(opt):
     """get_data - generator, read data, applying filters
 
@@ -152,7 +175,10 @@ def get_hash(path):
 
 @mode
 def recur_stat(opt):
-    "Recursively stat folder, store this output for other modes"
+    """Recursively stat folder, store this output for other modes
+
+    :param argparse.Namespace opt: command line options
+    """
     count = 0
     for path, dirs, files in os.walk(opt.top_dir):
         out = {'path':uni(path), 'files':[]}
@@ -165,7 +191,10 @@ def recur_stat(opt):
 
 @mode
 def find_ext(opt):
-    "Find folders with files with listed extensions"
+    """Find folders with files with listed extensions
+
+    :param argparse.Namespace opt: command line options
+    """
     exts = defaultdict(lambda: defaultdict(lambda: 0))
 
     for data in get_data(opt):
@@ -195,7 +224,10 @@ def find_ext(opt):
 
 @mode
 def rank_ext(opt):
-    "Rank extensions by popularity"
+    """Rank extensions by popularity
+
+    :param argparse.Namespace opt: command line options
+    """
 
     exts = defaultdict(lambda: defaultdict(lambda: 0))
 
@@ -213,7 +245,10 @@ def rank_ext(opt):
 
 @mode
 def summary(opt):
-    "Summary of files in data"
+    """Summary of files in data
+
+    :param argparse.Namespace opt: command line options
+    """
 
     dirs = files = bytes = 0
 
@@ -257,7 +292,10 @@ def files(opt):
 
 @mode
 def dupes(opt):
-    "Find duplicate files"
+    """Find duplicate files
+
+    :param argparse.Namespace opt: command line options
+    """
 
     # group by size
     sizes = defaultdict(lambda: [])
@@ -304,17 +342,10 @@ def dupes(opt):
             break
 
 def main():
-    """main - tweak options are dispatch mode
+    """main - get options and dispatch mode
     """
 
-    opt = make_parser().parse_args()
-    opt.extensions = [i.upper() for i in opt.extensions]
-    for attr in 'file', 'path':
-        regex = getattr(opt, attr+'_filter')
-        if regex:
-            setattr(opt, attr+'_filter',
-                re.compile(regex, flags=re.IGNORECASE))
-
+    opt = get_options(sys.argv[1:])
     globals()[opt.mode](opt)
 
 if __name__ == '__main__':
