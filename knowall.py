@@ -415,33 +415,18 @@ def dupe_dirs(opt):
         node[CHILD_HASH] = get_list_hash(child_hashes)
         node[CHILD_FILES] = child_total
         node[CHILD_BYTES] = child_bytes_total
-        hashes[node[CHILD_HASH]].append(path)
+        hashes[(child_bytes_total, node[CHILD_HASH])].append(path)
 
         return node[CHILD_HASH], child_total, child_bytes_total
 
     recur(db, '/')
 
-    # now descend db looking for hashes that appear more than once
-    # by descending find the point of duplication closest to the root
-
-    todo = [db]
-    hash_sizes = []
-    while todo:
-        node = todo.pop(0)
-        if len(hashes[node[CHILD_HASH]]) > 1:
-            hash_sizes.append((node[CHILD_BYTES], node[CHILD_HASH]))
-            # for i in hashes[node[CHILD_HASH]]:
-            #     print i
-            # print
-        else:
-            for key in sorted(node):
-                if not isinstance(key, int) and node[key][CHILD_FILES] > 0:
-                    todo.append(node[key])
-
-    hash_sizes.sort(reverse=True)
+    hash_sizes = sorted(hashes, reverse=True)
     for size, child_hash in hash_sizes:
+        if len(hashes[(size, child_hash)]) < 2:
+            continue
         print size
-        for i in hashes[child_hash]:
+        for i in hashes[(size, child_hash)]:
             print i
         print
 
