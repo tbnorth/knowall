@@ -13,6 +13,8 @@ import re
 import sys
 
 from collections import defaultdict, namedtuple
+from hashlib import sha1
+from pprint import pprint
 
 if sys.platform == "win32":
     import os, msvcrt
@@ -22,6 +24,14 @@ FileInfo = namedtuple("FileInfo",
     'name st_mode st_ino st_dev st_nlink st_uid '
     'st_gid st_size st_atime st_mtime st_ctime')
 
+# strings are used as keys for directories in get_hier_db() and
+# dupe_dirs(), so these are non-string keys for non-directory items
+FILES = 1
+CHILD_HASH = 2
+CHILD_FILES = 3
+CHILD_BYTES = 4
+
+# build list of modes available
 MODES = []
 
 def mode(func):
@@ -154,6 +164,38 @@ def get_data(opt):
         if data['files'] or not filtered:
             yield data
 
+def get_flat_db(opt):
+    """get_flat_db - get flat dir: paths dict
+
+    :param argparse.Namespace opt: command line options
+    :rtype: dict
+    """
+
+    db = {}
+
+    for data in get_data(opt):
+        db[data['path']] = data['files']
+
+    return db
+def get_hier_db(opt):
+    """get_hier_db - get hierarchical dir: paths dict
+
+    :param argparse.Namespace opt: command line options
+    :rtype: dict
+    """
+
+    db = {FILES:[]}
+
+    for data in get_data(opt):
+        insert = db
+        for path in data['path'].strip('/').split('/'):
+            if path not in insert:
+                insert[path] = {FILES:[]}
+            insert = insert[path]
+        insert[FILES] = data['files']
+
+    return db
+
 def get_hash(path):
     """get_hash - get hash for file
 
@@ -185,7 +227,7 @@ def recur_stat(opt):
         for filename in files:
             count += 1
             out['files'].append(tuple([uni(filename)]) +
-                tuple(os.stat(os.path.join(path, filename))))
+                tuple(os.lstat(os.path.join(path, filename))))
         print json.dumps(out)
         sys.stderr.write("%d %s\n" % (count, path))
 
@@ -341,6 +383,87 @@ def dupes(opt):
         if opt.show_n and n+1 >= opt.show_n:
             break
 
+@mode
+def dupe_dirs(opt):
+    """dupe_dirs - find duplicate dirs, as close to the root as possible
+
+    :param argparse.Namespace opt: command line options
+    """
+
+    db = get_hier_db(opt)
+    hashes = defaultdict(lambda: list())
+
+    def recur(node, path):
+
+        child_hashes = []
+        child_total = 0
+        child_bytes_total = 0
+
+        for key in sorted(node):
+            if not isinstance(key, int):
+                child_hash, child_count, child_bytes = recur(node[key], os.path.join(path, key))
+                if child_count:
+                    child_hashes.append(child_hash)
+                    child_total += child_count
+                    child_bytes_total += child_bytes
+
+        for fileinfo in sorted(node[FILES]):
+            child_hashes.append(get_info_hash(fileinfo))
+            child_total += 1
+            child_bytes_total += fileinfo[7]
+
+        node[CHILD_HASH] = get_list_hash(child_hashes)
+        node[CHILD_FILES] = child_total
+        node[CHILD_BYTES] = child_bytes_total
+        hashes[node[CHILD_HASH]].append(path)
+
+        return node[CHILD_HASH], child_total, child_bytes_total
+
+    recur(db, '/')
+
+    # now descend db looking for hashes that appear more than once
+    # by descending find the point of duplication closest to the root
+
+    todo = [db]
+    hash_sizes = []
+    while todo:
+        node = todo.pop(0)
+        if len(hashes[node[CHILD_HASH]]) > 1:
+            hash_sizes.append((node[CHILD_BYTES], node[CHILD_HASH]))
+            # for i in hashes[node[CHILD_HASH]]:
+            #     print i
+            # print
+        else:
+            for key in sorted(node):
+                if not isinstance(key, int) and node[key][CHILD_FILES] > 0:
+                    todo.append(node[key])
+
+    hash_sizes.sort(reverse=True)
+    for size, child_hash in hash_sizes:
+        print size
+        for i in hashes[child_hash]:
+            print i
+        print
+
+def get_info_hash(fileinfo):
+    """get_info_hash - get a hash for a fileinfo
+
+    :param list fileinfo: a list of file info parts
+    :return: a hash
+    :rtype: str
+    """
+
+    return sha1(str([fileinfo[0], fileinfo[7]])).hexdigest()
+
+def get_list_hash(hash_list):
+    """get_list_hash - get a hash for a list of hashes
+
+    :param list hash_list: list of hashes
+    :return: a hash
+    :rtype: str
+    """
+
+    return sha1(str(hash_list)).hexdigest()
 def main():
     """main - get options and dispatch mode
     """
