@@ -385,7 +385,7 @@ def dupes(opt):
 
 @mode
 def dupe_dirs(opt):
-    """dupe_dirs - find duplicate dirs, as close to the root as possible
+    """Find duplicate dirs., list from largest to smallest
 
     :param argparse.Namespace opt: command line options
     """
