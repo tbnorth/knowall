@@ -11,6 +11,8 @@ import json
 import os
 import re
 import sys
+import stat
+import time
 
 from collections import defaultdict, namedtuple
 from hashlib import sha1
@@ -112,6 +114,16 @@ def make_parser():
         help="regular expression files must match, case insensitive. "
             "Use '^(?!.*<pattern>)' to exclude <pattern>, e.g. "
             '--file-filter "^(?!.*(jpg|dat))"')
+
+    for type_ in 'creation', 'modification', 'access':
+        parser.add_argument("--min-%stime" % type_[0],
+            help="Minimum %s time" % type_, metavar='TIME')
+        parser.add_argument("--max-%stime" % type_[0],
+            help="Maximum %s time" % type_, metavar='TIME')
+    parser.add_argument("--show-time",
+        help="Any combination of 'C', 'M', 'A', e.g. MA, times "
+             "to show in file mode", metavar='TIMES')
+
     parser.add_argument("--dupes-sort-n", default=False,
         action="store_true",
         help="sort dupe listing by count, not size")
@@ -327,7 +339,16 @@ def files(opt):
     count = 0
     for data in get_data(opt):
         for fileinfo in data['files']:
-            print os.path.join(data['path'], fileinfo[0])
+            text = os.path.join(data['path'], fileinfo[0])
+            for i in opt.show_time or []:
+                x = {
+                    'a': fileinfo[stat.ST_ATIME+1],
+                    'c': fileinfo[stat.ST_CTIME+1],
+                    'm': fileinfo[stat.ST_MTIME+1],
+                }.get(i.lower())
+                if x:
+                    text += ' '+time.ctime(x)
+            print text
             count += 1
             if opt.show_n and count == opt.show_n:
                 return
@@ -454,7 +475,9 @@ def main():
     """
 
     opt = get_options(sys.argv[1:])
+    start = time.time()
     globals()[opt.mode](opt)
+    sys.stderr.write("%s seconds\n" % (time.time()-start))
 
 if __name__ == '__main__':
     main()
