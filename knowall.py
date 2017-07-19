@@ -14,9 +14,14 @@ import sys
 import stat
 import time
 
+from datetime import datetime
 from collections import defaultdict, namedtuple
 from hashlib import sha1
 from pprint import pprint
+
+from dateutil.parser import parse
+
+EPOCH = datetime(1970, 1, 1)
 
 if sys.platform == "win32":
     import os, msvcrt
@@ -149,33 +154,63 @@ def get_options(args=None):
         if regex:
             setattr(opt, attr+'_filter',
                 re.compile(regex, flags=re.IGNORECASE))
+    # convert time text to time
+    for end in 'min', 'max':
+        for type_ in 'cma':  # ctime, mtime, atime - create, modify, access
+            text = '%s_%stime' % (end, type_)
+            if getattr(opt, text):
+                try:
+                    timestamp = int((parse(getattr(opt, text)) - EPOCH).total_seconds())
+                    setattr(opt, text, timestamp)
+                except:
+                    print("Failed parsing %s '%s'" % (text, getattr(opt, text)))
+                    raise
     return opt
-
 def get_data(opt):
     """get_data - generator, read data, applying filters
 
     :param argparse.Namespace opt: command line options
     """
 
-    filtered = any([opt.file_filter, opt.max_size, opt.min_size])
+    filtered = any([
+        opt.file_filter, opt.max_size, opt.min_size,
+        opt.min_atime, opt.min_ctime, opt.min_mtime,
+        opt.max_atime, opt.max_ctime, opt.max_mtime,
+    ])
+
+    _name = 0
+    _size = stat.ST_SIZE + 1
+    _atime = stat.ST_ATIME + 1
+    _ctime = stat.ST_CTIME + 1
+    _mtime = stat.ST_MTIME + 1
 
     for line in sys.stdin:
         data = json.loads(line)
         if (opt.path_filter and
             not opt.path_filter.search(data['path'])):
             continue
-        # print data['files'][0][7], data['files'][0][7] <= opt.max_size
         data['files'] = [
             i for i in data['files']
-            if (opt.max_size is None or i[7] <= opt.max_size)
+            if (opt.max_size is None or i[_size] <= opt.max_size)
                and
-               (opt.min_size is None or i[7] >= opt.min_size)
+               (opt.min_size is None or i[_size] >= opt.min_size)
                and
-               (opt.file_filter is None or opt.file_filter.search(i[0]))
+               (opt.file_filter is None or opt.file_filter.search(i[_name]))
+               and
+               (opt.min_atime is None or i[_atime] >= opt.min_atime)
+               and
+               (opt.max_atime is None or i[_atime] <= opt.max_atime)
+               and
+               (opt.min_ctime is None or i[_ctime] >= opt.min_ctime)
+               and
+               (opt.max_ctime is None or i[_ctime] <= opt.max_ctime)
+               and
+               (opt.min_mtime is None or i[_mtime] >= opt.min_mtime)
+               and
+               (opt.max_mtime is None or i[_mtime] <= opt.max_mtime)
         ]
         if data['files'] or not filtered:
             yield data
-
 def get_flat_db(opt):
     """get_flat_db - get flat dir: paths dict
 
