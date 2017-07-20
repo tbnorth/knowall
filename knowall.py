@@ -124,7 +124,7 @@ def make_parser():
         parser.add_argument("--min-%stime" % type_[0],
             help="Minimum %s time" % type_, metavar='TIME')
         parser.add_argument("--max-%stime" % type_[0],
-            help="Maximum %s time" % type_, metavar='TIME')
+            help="Maximum %s time, free format, e.g. YYYYMMDDHHMM" % type_, metavar='TIME')
     parser.add_argument("--show-time",
         help="Any combination of 'C', 'M', 'A', e.g. MA, times "
              "to show in file mode", metavar='TIMES')
