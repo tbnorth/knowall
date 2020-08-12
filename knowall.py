@@ -51,7 +51,7 @@ def mode(func):
     return func
 
 def uni(t):
-    return unicode(t.decode('cp1252'))
+    return t.decode('cp1252') if isinstance(t, bytes) else t
 
 class Formatter(
     argparse.ArgumentDefaultsHelpFormatter,
@@ -163,7 +163,7 @@ def get_options(args=None):
                     timestamp = int((parse(getattr(opt, text)) - EPOCH).total_seconds())
                     setattr(opt, text, timestamp)
                 except:
-                    print("Failed parsing %s '%s'" % (text, getattr(opt, text)))
+                    print(("Failed parsing %s '%s'" % (text, getattr(opt, text))))
                     raise
     return opt
 def get_data(opt):
@@ -275,7 +275,7 @@ def recur_stat(opt):
             count += 1
             out['files'].append(tuple([uni(filename)]) +
                 tuple(os.lstat(os.path.join(path, filename))))
-        print json.dumps(out)
+        print((json.dumps(out)))
         sys.stderr.write("%d %s\n" % (count, path))
 
 @mode
@@ -330,7 +330,7 @@ def rank_ext(opt):
     counts = [[exts[i]['__COUNT'], i] for i in exts]
     counts.sort(reverse=True)
     for i in counts[:opt.show_n] if opt.show_n else counts:
-        print "% 5d %s" % tuple(i)
+        print(("% 5d %s" % tuple(i)))
 
 @mode
 def summary(opt):
@@ -349,8 +349,8 @@ def summary(opt):
             files += 1
             bytes += fileinfo[7]
 
-    print "{dirs:,d} folders, {files:,d} files, {bytes:,d} bytes".format(
-        dirs=dirs, files=files, bytes=bytes)
+    print(("{dirs:,d} folders, {files:,d} files, {bytes:,d} bytes".format(
+        dirs=dirs, files=files, bytes=bytes)))
 
 @mode
 def dirs(opt):
@@ -360,7 +360,7 @@ def dirs(opt):
     """
 
     for n, data in enumerate(get_data(opt)):
-        print data['path']
+        print((data['path']))
         if opt.show_n and n+1 >= opt.show_n:
             break
 
@@ -383,7 +383,7 @@ def files(opt):
                 }.get(i.lower())
                 if x:
                     text += ' '+time.ctime(x)
-            print text
+            print(text)
             count += 1
             if opt.show_n and count == opt.show_n:
                 return
@@ -425,14 +425,14 @@ def dupes(opt):
             hashed[(size, hashtext)].append(filepath)
 
         # filter out singles
-        hashed = {k:v for k,v in hashed.items() if len(v) > 1}
+        hashed = {k:v for k,v in list(hashed.items()) if len(v) > 1}
 
         for sizehash in hashed:
             if len(hashed) > 1:  # same size, multiple contents
                 sizetext = "%s:%s" % sizehash
             else:  # same content for all
                 sizetext = sizehash[0]
-            print sizetext, len(hashed[sizehash]), hashed[sizehash]
+            print((sizetext, len(hashed[sizehash]), hashed[sizehash]))
             n += 1
 
         # might overshoot, but better to show complete sets of dupes
@@ -481,10 +481,10 @@ def dupe_dirs(opt):
     for size, child_hash in hash_sizes:
         if len(hashes[(size, child_hash)]) < 2:
             continue
-        print size
+        print(size)
         for i in hashes[(size, child_hash)]:
-            print i
-        print
+            print(i)
+        print()
 
 def get_info_hash(fileinfo):
     """get_info_hash - get a hash for a fileinfo
