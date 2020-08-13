@@ -183,6 +183,10 @@ def make_parser():
         "--hash-db",
         help="SQLite DB of hash values to check/update before/when hashing",
     )
+    parser.add_argument(
+        "--resume-from", metavar="PATH",
+        help="skip paths before (alphabetically) PATH to resume interrupted indexing",
+    )
 
     return parser
 
@@ -331,7 +335,15 @@ def recur_stat(opt):
     :param argparse.Namespace opt: command line options
     """
     count = 0
+    active = False if opt.resume_from else True
     for path, dirs, files in os.walk(opt.top_dir):
+        if not active:
+            if path != opt.resume_from:
+                sys.stderr.write(f"Skipping '{path}'\n")
+                if not opt.resume_from.startswith(path):
+                    dirs[:] = []
+                continue
+            active = True
         out = {'path': uni(path), 'files': []}
         for filename in files:
             count += 1
