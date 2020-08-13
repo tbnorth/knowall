@@ -10,22 +10,20 @@ import csv
 import json
 import os
 import re
-import sys
+import sqlite3
 import stat
+import sys
 import time
 
-from datetime import datetime
 from collections import defaultdict, namedtuple
+from datetime import datetime
+from functools import lru_cache
 from hashlib import sha1
 from pprint import pprint
 
 from dateutil.parser import parse
 
 EPOCH = datetime(1970, 1, 1)
-
-if sys.platform == "win32":
-    import os, msvcrt
-    msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
 
 FileInfo = namedtuple("FileInfo",
     'name st_mode st_ino st_dev st_nlink st_uid '
@@ -136,6 +134,8 @@ def make_parser():
         action="store_true",
         help="don't hash possible dupes to check content, "
              "just use size.  WARNING: may return false dupe listings")
+    parser.add_argument("--hash-db",
+        help="SQLite DB of hash values to check/update before/when hashing")
 
     return parser
 
@@ -163,7 +163,7 @@ def get_options(args=None):
                     timestamp = int((parse(getattr(opt, text)) - EPOCH).total_seconds())
                     setattr(opt, text, timestamp)
                 except:
-                    print(("Failed parsing %s '%s'" % (text, getattr(opt, text))))
+                    print("Failed parsing %s '%s'" % (text, getattr(opt, text)))
                     raise
     return opt
 def get_data(opt):
@@ -275,7 +275,7 @@ def recur_stat(opt):
             count += 1
             out['files'].append(tuple([uni(filename)]) +
                 tuple(os.lstat(os.path.join(path, filename))))
-        print((json.dumps(out)))
+        print(json.dumps(out))
         sys.stderr.write("%d %s\n" % (count, path))
 
 @mode
@@ -330,7 +330,7 @@ def rank_ext(opt):
     counts = [[exts[i]['__COUNT'], i] for i in exts]
     counts.sort(reverse=True)
     for i in counts[:opt.show_n] if opt.show_n else counts:
-        print(("% 5d %s" % tuple(i)))
+        print("% 5d %s" % tuple(i))
 
 @mode
 def summary(opt):
@@ -349,8 +349,8 @@ def summary(opt):
             files += 1
             bytes += fileinfo[7]
 
-    print(("{dirs:,d} folders, {files:,d} files, {bytes:,d} bytes".format(
-        dirs=dirs, files=files, bytes=bytes)))
+    print("{dirs:,d} folders, {files:,d} files, {bytes:,d} bytes".format(
+        dirs=dirs, files=files, bytes=bytes))
 
 @mode
 def dirs(opt):
@@ -360,7 +360,7 @@ def dirs(opt):
     """
 
     for n, data in enumerate(get_data(opt)):
-        print((data['path']))
+        print(data['path'])
         if opt.show_n and n+1 >= opt.show_n:
             break
 
@@ -388,6 +388,59 @@ def files(opt):
             if opt.show_n and count == opt.show_n:
                 return
 
+@lru_cache
+def hash_db_con_cur(dbpath):
+    """Return connection to hash db, creating if necessary"""
+    if not dbpath:
+        return None, None
+    existed = os.path.exists(dbpath)
+    con = sqlite3.connect(dbpath)
+    cur = con.cursor()
+    if not existed:
+        cur.execute("create table hash ("
+            "filepath text, st_size int, st_mtime int, hash text)")
+        cur.execute("create unique index hash_filepath_idx on "
+                    "hash(filepath, st_size, st_mtime)")
+        con.commit()
+    return con, cur
+
+
+@lru_cache
+def find_hash(dbpath, filepath, fileinfo, no_hash=False):
+    """Find the hash for filepath, depending on hashing settings
+
+    Storing file hashes to determine true duplicates is really just intended as
+    a chaching mechanism to speed up repeated duplicate analysis on the same
+    JSON index file.  I.e. ideally the hash cache DB would be deleted when a
+    new JSON index file is created.  But, on slow links, reusing the hash cache
+    DB could save a lot of time, for that reason the hash index includes file
+    size and modification time as well as path.
+    """
+    hashtext = None
+    con, cur = hash_db_con_cur(dbpath)
+    if con:
+        cur.execute(
+            "select hash from hash where filepath = ? "
+            " and st_size = ? and st_mtime = ?",
+            [filepath, fileinfo.st_size, fileinfo.st_mtime]
+        )
+        hashtexts = cur.fetchall()
+        if hashtexts:
+            hashtext = hashtexts[0][0]
+
+    if hashtext or no_hash:
+        return hashtext or 'no-hash'
+
+    hashtext = get_hash(filepath)
+    if con:
+        cur.execute(
+            "insert into hash values (?, ?, ?, ?)",
+            [filepath, fileinfo.st_size, fileinfo.st_mtime, hashtext]
+        )
+        con.commit()
+    return hashtext
+
+
 @mode
 def dupes(opt):
     """Find duplicate files
@@ -400,7 +453,7 @@ def dupes(opt):
     for data in get_data(opt):
         for filedata in data['files']:
             fileinfo = FileInfo(*filedata)
-            sizes[fileinfo.st_size].append((data['path'], fileinfo.name))
+            sizes[fileinfo.st_size].append((data['path'], fileinfo))
 
     # sort by size or count
     if opt.dupes_sort_n:
@@ -416,12 +469,9 @@ def dupes(opt):
 
         # within sizes with multiples, hash files, maybe
         hashed = defaultdict(lambda: [])
-        for path, filename in sizes[size]:
-            filepath = os.path.join(path, filename)
-            if opt.dupes_no_hash:
-                hashtext = 'no-hash'
-            else:
-                hashtext = get_hash(filepath)
+        for path, fileinfo in sizes[size]:
+            filepath = os.path.join(path, fileinfo.name)
+            hashtext = find_hash(opt.hash_db, filepath, fileinfo, no_hash=opt.dupes_no_hash)
             hashed[(size, hashtext)].append(filepath)
 
         # filter out singles
@@ -432,7 +482,7 @@ def dupes(opt):
                 sizetext = "%s:%s" % sizehash
             else:  # same content for all
                 sizetext = sizehash[0]
-            print((sizetext, len(hashed[sizehash]), hashed[sizehash]))
+            print(sizetext, len(hashed[sizehash]), hashed[sizehash])
             n += 1
 
         # might overshoot, but better to show complete sets of dupes
