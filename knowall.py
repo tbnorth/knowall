@@ -346,11 +346,17 @@ def recur_stat(opt):
             active = True
         out = {'path': uni(path), 'files': []}
         for filename in files:
-            count += 1
-            out['files'].append(
-                tuple([uni(filename)])
-                + tuple(os.lstat(os.path.join(path, filename)))
-            )
+            filepath = os.path.join(path, filename)
+            try:
+                count += 1
+                out['files'].append(
+                    tuple([uni(filename)])
+                    + tuple(os.lstat(filepath))
+                )
+            except FileNotFoundError:
+                filepath = os.path.abspath(filepath)
+                sys.stderr.write(f"Can't open {len(filepath)} char. path {filepath}\n")
+
         print(json.dumps(out))
         sys.stderr.write("%d %s\n" % (count, path))
 
