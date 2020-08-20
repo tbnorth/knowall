@@ -562,7 +562,7 @@ def dupes(opt):
     if opt.dupes_sort_n:
         order = sorted(sizes, reverse=True, key=lambda x: len(sizes[x]))
     else:
-        order = sorted(sizes, reverse=True)
+        order = sorted(sizes, reverse=True, key=lambda x: x or 0)
 
     n = 0
     for size in order:
