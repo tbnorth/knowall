@@ -30,6 +30,8 @@ FileInfo = namedtuple(
     'name st_mode st_ino st_dev st_nlink st_uid '
     'st_gid st_size st_atime st_mtime st_ctime',
 )
+# when windows max file length causes os.lstat() to fail, use this
+NULLSTAT = tuple([None] * 10)  # 10 is list above minus name
 
 # strings are used as keys for directories in get_hier_db() and
 # dupe_dirs(), so these are non-string keys for non-directory items
@@ -250,6 +252,7 @@ def get_data(opt):
     _atime = stat.ST_ATIME + 1
     _ctime = stat.ST_CTIME + 1
     _mtime = stat.ST_MTIME + 1
+    nn = lambda x: x if x is not None else 0
 
     for line in sys.stdin:
         data = json.loads(line)
@@ -258,15 +261,15 @@ def get_data(opt):
         data['files'] = [
             i
             for i in data['files']
-            if (opt.max_size is None or i[_size] <= opt.max_size)
-            and (opt.min_size is None or i[_size] >= opt.min_size)
+            if (opt.max_size is None or nn(i[_size]) <= opt.max_size)
+            and (opt.min_size is None or nn(i[_size]) >= opt.min_size)
             and (opt.file_filter is None or opt.file_filter.search(i[_name]))
-            and (opt.min_atime is None or i[_atime] >= opt.min_atime)
-            and (opt.max_atime is None or i[_atime] <= opt.max_atime)
-            and (opt.min_ctime is None or i[_ctime] >= opt.min_ctime)
-            and (opt.max_ctime is None or i[_ctime] <= opt.max_ctime)
-            and (opt.min_mtime is None or i[_mtime] >= opt.min_mtime)
-            and (opt.max_mtime is None or i[_mtime] <= opt.max_mtime)
+            and (opt.min_atime is None or nn(i[_atime]) >= opt.min_atime)
+            and (opt.max_atime is None or nn(i[_atime]) <= opt.max_atime)
+            and (opt.min_ctime is None or nn(i[_ctime]) >= opt.min_ctime)
+            and (opt.max_ctime is None or nn(i[_ctime]) <= opt.max_ctime)
+            and (opt.min_mtime is None or nn(i[_mtime]) >= opt.min_mtime)
+            and (opt.max_mtime is None or nn(i[_mtime]) <= opt.max_mtime)
         ]
         if data['files'] or not filtered:
             yield data
@@ -354,8 +357,13 @@ def recur_stat(opt):
                     + tuple(os.lstat(filepath))
                 )
             except FileNotFoundError:
+                # hit Windows max path length
                 filepath = os.path.abspath(filepath)
                 sys.stderr.write(f"Can't open {len(filepath)} char. path {filepath}\n")
+                out['files'].append(
+                    tuple([uni(filename)])
+                    + NULLSTAT
+                )
 
         print(json.dumps(out))
         sys.stderr.write("%d %s\n" % (count, path))
@@ -422,7 +430,7 @@ def summary(opt):
     :param argparse.Namespace opt: command line options
     """
 
-    dirs = files = bytes = 0
+    dirs = files = bytes = nostat = 0
 
     for data in get_data(opt):
 
@@ -430,12 +438,14 @@ def summary(opt):
 
         for fileinfo in data['files']:
             files += 1
-            bytes += fileinfo[7]
+            if  fileinfo[7] is None:
+                nostat += 1
+            else:
+                bytes += fileinfo[7]
 
     print(
-        "{dirs:,d} folders, {files:,d} files, {bytes:,d} bytes".format(
-            dirs=dirs, files=files, bytes=bytes
-        )
+        f"{dirs:,d} folders, {files:,d} files, {bytes:,d} bytes, "
+        f"no stats. {nostat:,d}"
     )
 
 
