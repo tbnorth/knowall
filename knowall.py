@@ -310,10 +310,11 @@ def get_hier_db(opt):
     return db
 
 
-def get_hash(path):
+def get_hash(path, callback=None):
     """get_hash - get hash for file
 
     :param str path: path to file
+    :param function(read) callback: callback for progress updates
     :return: sha1 hash of file
     :rtype: str
     """
@@ -322,9 +323,17 @@ def get_hash(path):
     import hashlib
 
     digest = hashlib.sha1()
-    infile = open(path, 'rb')
+    try:
+        infile = open(path, 'rb')
+    except FileNotFoundError:
+        # probably the Windows path length issue again
+        return "NOFILEACCESS"
+    read = 0
     while True:
         data = infile.read(buff_size)
+        read += len(data)
+        if callback:
+            callback(read)
         digest.update(data)
         if len(data) != buff_size:
             break
@@ -534,7 +543,13 @@ def find_hash(dbpath, filepath, fileinfo, no_hash=False):
     if hashtext or no_hash:
         return hashtext or 'no-hash'
 
-    hashtext = get_hash(filepath)
+    def callback(read, filepath=filepath, fileinfo=fileinfo, __last=[time.time()]):
+        if time.time() - __last[0] > 10:
+            pct = 100*read/fileinfo.st_size
+            print(f"{filepath}: {read:,d}/{fileinfo.st_size:,d} {pct:.1f}%")
+            __last[0] = time.time()
+
+    hashtext = get_hash(filepath, callback=callback)
     if con:
         cur.execute(
             "insert into hash values (?, ?, ?, ?)",
@@ -583,9 +598,9 @@ def dupes(opt):
 
         for sizehash in hashed:
             if len(hashed) > 1:  # same size, multiple contents
-                sizetext = "%s:%s" % sizehash
+                sizetext = f"{sizehash[0] or 0:,d}:{sizehash[1]}"
             else:  # same content for all
-                sizetext = sizehash[0]
+                sizetext = f"{sizehash[0] or 0:,d}"
             print(sizetext, len(hashed[sizehash]), hashed[sizehash])
             n += 1
 
@@ -610,6 +625,7 @@ def dupe_dirs(opt):
         child_total = 0
         child_bytes_total = 0
 
+        print(node)
         for key in sorted(node):
             if not isinstance(key, int):
                 child_hash, child_count, child_bytes = recur(
