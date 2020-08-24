@@ -186,7 +186,8 @@ def make_parser():
         help="SQLite DB of hash values to check/update before/when hashing",
     )
     parser.add_argument(
-        "--resume-from", metavar="PATH",
+        "--resume-from",
+        metavar="PATH",
         help="skip paths before (alphabetically) PATH to resume interrupted indexing",
     )
 
@@ -362,17 +363,15 @@ def recur_stat(opt):
             try:
                 count += 1
                 out['files'].append(
-                    tuple([uni(filename)])
-                    + tuple(os.lstat(filepath))
+                    tuple([uni(filename)]) + tuple(os.lstat(filepath))
                 )
             except FileNotFoundError:
                 # hit Windows max path length
                 filepath = os.path.abspath(filepath)
-                sys.stderr.write(f"Can't open {len(filepath)} char. path {filepath}\n")
-                out['files'].append(
-                    tuple([uni(filename)])
-                    + NULLSTAT
+                sys.stderr.write(
+                    f"Can't open {len(filepath)} char. path {filepath}\n"
                 )
+                out['files'].append(tuple([uni(filename)]) + NULLSTAT)
 
         print(json.dumps(out))
         sys.stderr.write("%d %s\n" % (count, path))
@@ -447,7 +446,7 @@ def summary(opt):
 
         for fileinfo in data['files']:
             files += 1
-            if  fileinfo[7] is None:
+            if fileinfo[7] is None:
                 nostat += 1
             else:
                 bytes += fileinfo[7]
@@ -544,9 +543,11 @@ def find_hash(dbpath, filepath, fileinfo, no_hash=False):
     if hashtext or no_hash:
         return hashtext or 'no-hash'
 
-    def callback(read, filepath=filepath, fileinfo=fileinfo, __last=[time.time()]):
+    def callback(
+        read, filepath=filepath, fileinfo=fileinfo, __last=[time.time()]
+    ):
         if time.time() - __last[0] > 10:
-            pct = 100*read/fileinfo.st_size
+            pct = 100 * read / fileinfo.st_size
             print(f"{filepath}: {read:,d}/{fileinfo.st_size:,d} {pct:.1f}%")
             __last[0] = time.time()
 
@@ -561,8 +562,7 @@ def find_hash(dbpath, filepath, fileinfo, no_hash=False):
     return hashtext
 
 
-@mode
-def dupes(opt):
+def get_dupes(opt):
     """Find duplicate files
 
     :param argparse.Namespace opt: command line options
@@ -581,34 +581,59 @@ def dupes(opt):
     else:
         order = sorted(sizes, reverse=True, key=lambda x: x or 0)
 
-    n = 0
     for size in order:
         if len(sizes[size]) < 2:
             continue
 
         # within sizes with multiples, hash files, maybe
-        hashed = defaultdict(lambda: [])
+        hashed = defaultdict(list)
         for path, fileinfo in sizes[size]:
             filepath = os.path.join(path, fileinfo.name)
             hashtext = find_hash(
                 opt.hash_db, filepath, fileinfo, no_hash=opt.dupes_no_hash
             )
+            # can't yield this yet, reference to single file that may not be
+            # a dupe
             hashed[(size, hashtext)].append(filepath)
 
-        # filter out singles
-        hashed = {k: v for k, v in list(hashed.items()) if len(v) > 1}
+        # now filter out singles and yield dupes
+        yield {k: v for k, v in list(hashed.items()) if len(v) > 1}
 
-        for sizehash in hashed:
-            if len(hashed) > 1:  # same size, multiple contents
-                sizetext = f"{sizehash[0] or 0:,d}:{sizehash[1]}"
+
+@mode
+def dupes(opt):
+    """Print duplicate files
+
+    :param argparse.Namespace opt: command line options
+    """
+    n = 0
+    stats = defaultdict(lambda: 0)
+    for hashed in get_dupes(opt):
+        stats['sizedupes'] = max(
+            stats['sizedupes'], sum(len(i) - 1 for i in hashed.values())
+        )
+        for (size, hash), files in hashed.items():
+            files_n = len(files)
+            assert files_n > 1
+            stats['files'] += files_n - 1
+            stats['bytes'] += (files_n - 1) * size
+            stats['largest'] = max(stats['largest'], size)
+            stats['mostdupes'] = max(stats['mostdupes'], files_n - 1)
+            stats['mostspace'] = max(stats['mostspace'], (files_n - 1) * size)
+
+            if len(hashed) > 1:  # same size, multiple contents (hashes)
+                sizetext = f"{size or 0:,d}:{hash}"
             else:  # same content for all
-                sizetext = f"{sizehash[0] or 0:,d}"
-            print(sizetext, len(hashed[sizehash]), hashed[sizehash])
+                sizetext = f"{size or 0:,d}"
+            print(sizetext, files_n, files)
             n += 1
 
         # might overshoot, but better to show complete sets of dupes
         if opt.show_n and n + 1 >= opt.show_n:
             break
+
+    for k, v in stats.items():
+        print(f"{k:>12s}: {v:,d}")
 
 
 @mode
