@@ -496,9 +496,9 @@ def files(opt):
                 return
 
 
-@lru_cache
 def hash_db_con_cur(dbpath):
     """Return connection to hash db, creating if necessary"""
+
     if not dbpath:
         return None, None
     existed = os.path.exists(dbpath)
@@ -539,6 +539,7 @@ def find_hash(dbpath, filepath, fileinfo, no_hash=False):
         hashtexts = cur.fetchall()
         if hashtexts:
             hashtext = hashtexts[0][0]
+    del con, cur  # to allow syncing etc.
 
     if hashtext or no_hash:
         return hashtext or 'no-hash'
@@ -550,6 +551,7 @@ def find_hash(dbpath, filepath, fileinfo, no_hash=False):
             __last[0] = time.time()
 
     hashtext = get_hash(filepath, callback=callback)
+    con, cur = hash_db_con_cur(dbpath)
     if con:
         cur.execute(
             "insert into hash values (?, ?, ?, ?)",
