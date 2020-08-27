@@ -609,10 +609,12 @@ def dupes(opt):
     n = 0
     stats = defaultdict(lambda: 0)
     for hashed in get_dupes(opt):
+        stats['sizealts'] = max(stats['sizealts'], len(hashed))
         stats['sizedupes'] = max(
             stats['sizedupes'], sum(len(i) - 1 for i in hashed.values())
         )
         for (size, hash), files in hashed.items():
+            size = size or 0  # can be None for unstatable files
             files_n = len(files)
             assert files_n > 1
             stats['files'] += files_n - 1
