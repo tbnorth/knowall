@@ -20,6 +20,7 @@ from datetime import datetime
 from functools import lru_cache
 from hashlib import sha1
 from pprint import pprint
+from types import SimpleNamespace as SN
 
 from dateutil.parser import parse
 
@@ -711,6 +712,34 @@ def get_list_hash(hash_list):
     return sha1(str(hash_list)).hexdigest()
 
 
+def variants_add_hashes(paths):
+    if len(paths) <= 1:
+        return [i+(None,) for i in paths]
+
+@mode
+def variants(opt):
+    """List variant files (same name, different content)"""
+    name = defaultdict(list)
+    st_name = FileInfo._fields.index('name')
+    st_size = FileInfo._fields.index('st_size')
+    for data in get_data(opt):
+        for fileinfo in data['files']:
+            name[fileinfo[st_name]].append((data['path'], fileinfo))
+    for filename, paths in name.items():
+        if len(paths) == 1:
+            continue
+        print(filename)
+        sizes = defaultdict(list)
+        for path, fileinfo in paths:
+            sizes[fileinfo[st_size]].append((path, fileinfo))
+        for size, paths in sizes.items():
+            print(f"    {size:,d} ")
+            variants_add_hashes(paths)
+            for path, fileinfo in paths:
+                print(f"        {path}")
+
+
+
 def main():
     """main - get options and dispatch mode
     """
@@ -718,7 +747,7 @@ def main():
     opt = get_options(sys.argv[1:])
     start = time.time()
     globals()[opt.mode](opt)
-    sys.stderr.write("%s seconds\n" % (time.time() - start))
+    sys.stderr.write("%.2g seconds\n" % (time.time() - start))
 
 
 if __name__ == '__main__':
