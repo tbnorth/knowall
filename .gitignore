@@ -1,0 +1,6 @@
+.coverage
+__pycache__
+htmlcov
+tests/test.db
+tests/test.jsonl
+tests/testfs

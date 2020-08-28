@@ -249,29 +249,25 @@ def get_data(opt):
         ]
     )
 
-    _name = 0
-    _size = stat.ST_SIZE + 1
-    _atime = stat.ST_ATIME + 1
-    _ctime = stat.ST_CTIME + 1
-    _mtime = stat.ST_MTIME + 1
     nn = lambda x: x if x is not None else 0
 
     for line in sys.stdin:
         data = json.loads(line)
+        data['files'] = [FileInfo._make(i) for i in data['files']]
         if opt.path_filter and not opt.path_filter.search(data['path']):
             continue
         data['files'] = [
             i
             for i in data['files']
-            if (opt.max_size is None or nn(i[_size]) <= opt.max_size)
-            and (opt.min_size is None or nn(i[_size]) >= opt.min_size)
-            and (opt.file_filter is None or opt.file_filter.search(i[_name]))
-            and (opt.min_atime is None or nn(i[_atime]) >= opt.min_atime)
-            and (opt.max_atime is None or nn(i[_atime]) <= opt.max_atime)
-            and (opt.min_ctime is None or nn(i[_ctime]) >= opt.min_ctime)
-            and (opt.max_ctime is None or nn(i[_ctime]) <= opt.max_ctime)
-            and (opt.min_mtime is None or nn(i[_mtime]) >= opt.min_mtime)
-            and (opt.max_mtime is None or nn(i[_mtime]) <= opt.max_mtime)
+            if (opt.max_size is None or nn(i.st_size) <= opt.max_size)
+            and (opt.min_size is None or nn(i.st_size) >= opt.min_size)
+            and (opt.file_filter is None or opt.file_filter.search(i.name))
+            and (opt.min_atime is None or nn(i.st_atime) >= opt.min_atime)
+            and (opt.max_atime is None or nn(i.st_atime) <= opt.max_atime)
+            and (opt.min_ctime is None or nn(i.st_ctime) >= opt.min_ctime)
+            and (opt.max_ctime is None or nn(i.st_ctime) <= opt.max_ctime)
+            and (opt.min_mtime is None or nn(i.st_mtime) >= opt.min_mtime)
+            and (opt.max_mtime is None or nn(i.st_mtime) <= opt.max_mtime)
         ]
         if data['files'] or not filtered:
             yield data
@@ -481,7 +477,7 @@ def files(opt):
     count = 0
     for data in get_data(opt):
         for fileinfo in data['files']:
-            text = os.path.join(data['path'], fileinfo[0])
+            text = os.path.join(data['path'], fileinfo.name)
             for i in opt.show_time or []:
                 x = {
                     'a': fileinfo[stat.ST_ATIME + 1],

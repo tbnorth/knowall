@@ -64,3 +64,11 @@ required arguments:
   --mode MODE           mode from list above (default: recur_stat)
 ```
 
+## Dev. notes
+
+Run tests/mkfakefs.py in tests to create testfs/ there.
+
+Run tests and generate coverage report
+
+    coverage run -m pytest && coverage report && coverage html
+    
