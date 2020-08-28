@@ -708,16 +708,28 @@ def get_list_hash(hash_list):
     return sha1(str(hash_list)).hexdigest()
 
 
-def variants_add_hashes(paths):
+def variants_add_hashes(opt, paths):
     if len(paths) <= 1:
-        return [i+(None,) for i in paths]
+        return [i + ('',) for i in paths]
+    ans = []
+    for path, fileinfo in paths:
+        hashtext = find_hash(
+            opt.hash_db,
+            os.path.join(path, fileinfo.name),
+            fileinfo,
+            no_hash=opt.dupes_no_hash,
+        )
+        ans.append((path, fileinfo, hashtext[:7]+' '))
+
+    return ans
+
+def timestamp_text(ts):
+    return time.strftime("%Y%m%d%H%M%S", time.localtime(ts))
 
 @mode
 def variants(opt):
     """List variant files (same name, different content)"""
     name = defaultdict(list)
-    st_name = FileInfo._fields.index('name')
-    st_size = FileInfo._fields.index('st_size')
     for data in get_data(opt):
         for fileinfo in data['files']:
             name[fileinfo.name].append((data['path'], fileinfo))
@@ -730,10 +742,9 @@ def variants(opt):
             sizes[fileinfo.st_size].append((path, fileinfo))
         for size, paths in sizes.items():
             print(f"    {size:,d} ")
-            variants_add_hashes(paths)
-            for path, fileinfo in paths:
-                print(f"        {path}")
-
+            paths = variants_add_hashes(opt, paths)
+            for path, fileinfo, hash in paths:
+                print(f"        {hash}{timestamp_text(fileinfo.st_ctime)} {path}")
 
 
 def main():
