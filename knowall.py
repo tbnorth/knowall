@@ -385,7 +385,7 @@ def find_ext(opt):
     for data in get_data(opt):
 
         for fileinfo in data['files']:
-            name, ext = os.path.splitext(fileinfo[0])
+            name, ext = os.path.splitext(fileinfo.name)
             exts[ext.upper()][data['path']] += 1
 
     pathcount = defaultdict(lambda: defaultdict(lambda: 0))
@@ -418,7 +418,7 @@ def rank_ext(opt):
     for data in get_data(opt):
 
         for fileinfo in data['files']:
-            name, ext = os.path.splitext(fileinfo[0])
+            name, ext = os.path.splitext(fileinfo.name)
             exts[ext.upper()][data['path']] += 1
             exts[ext.upper()]['__COUNT'] += 1
 
@@ -443,10 +443,10 @@ def summary(opt):
 
         for fileinfo in data['files']:
             files += 1
-            if fileinfo[7] is None:
+            if fileinfo.st_size is None:
                 nostat += 1
             else:
-                bytes += fileinfo[7]
+                bytes += fileinfo.st_size
 
     print(
         f"{dirs:,d} folders, {files:,d} files, {bytes:,d} bytes, "
@@ -665,7 +665,7 @@ def dupe_dirs(opt):
         for fileinfo in sorted(node[FILES]):
             child_hashes.append(get_info_hash(fileinfo))
             child_total += 1
-            child_bytes_total += fileinfo[7]
+            child_bytes_total += fileinfo.st_size
 
         node[CHILD_HASH] = get_list_hash(child_hashes)
         node[CHILD_FILES] = child_total
@@ -694,7 +694,7 @@ def get_info_hash(fileinfo):
     :rtype: str
     """
 
-    return sha1(str([fileinfo[0], fileinfo[7]])).hexdigest()
+    return sha1(str([fileinfo.name, fileinfo.st_size])).hexdigest()
 
 
 def get_list_hash(hash_list):
@@ -720,14 +720,14 @@ def variants(opt):
     st_size = FileInfo._fields.index('st_size')
     for data in get_data(opt):
         for fileinfo in data['files']:
-            name[fileinfo[st_name]].append((data['path'], fileinfo))
+            name[fileinfo.name].append((data['path'], fileinfo))
     for filename, paths in name.items():
         if len(paths) == 1:
             continue
         print(filename)
         sizes = defaultdict(list)
         for path, fileinfo in paths:
-            sizes[fileinfo[st_size]].append((path, fileinfo))
+            sizes[fileinfo.st_size].append((path, fileinfo))
         for size, paths in sizes.items():
             print(f"    {size:,d} ")
             variants_add_hashes(paths)
