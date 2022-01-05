@@ -4,3 +4,4 @@ htmlcov
 tests/test.db
 tests/test.jsonl
 tests/testfs
+venv*

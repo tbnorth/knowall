@@ -1,4 +1,3 @@
-import argparse
 import os
 import sys
 
@@ -75,14 +74,6 @@ def test_dirs():
     knowall.main()
 
 
-def test_variants():
-    # FIXME: make test test something
-    sys.argv[1:] = TOP_DIR + ['--mode', 'variants']
-    os.chdir(os.path.dirname(__file__))
-    sys.stdin = open("test.jsonl")
-    knowall.main()
-
-
 def test_summary():
     # FIXME: make test test something
     sys.argv[1:] = TOP_DIR + ['--mode', 'summary']
@@ -120,8 +111,7 @@ def test_dupe_dirs():
     sys.argv[1:] = TOP_DIR + ['--mode', 'dupe_dirs']
     os.chdir(os.path.dirname(__file__))
     sys.stdin = open("test.jsonl")
-    with pytest.raises(TypeError):
-        knowall.main()
+    knowall.main()
 
 
 def test_filters():
