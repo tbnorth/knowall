@@ -41,6 +41,13 @@ CHILD_BYTES = 4
 # build list of modes available
 MODES = []
 
+SORTS = {
+    "name": "Force alphabetical sorting, unsorted may be alphabetical and faster",
+    "count": "Sort dirs / dupes by file count (dupes defaults to total size)",
+    "size": "Sort dirs by size",
+    "length": "Sort by path length",
+}
+
 
 def mode(func):
     """mode - decorator to collect modes
@@ -79,13 +86,16 @@ def make_parser():
         "    python < some_path.json --mode dupes --show-n 5 \n"
         "    # most common extensions on subpath\n"
         "    python < some_path.json --mode rank_ext --path-filter some/path/here\n\n"
-        "Modes:\n",
+        "Modes:",
     ]
 
     for mode in MODES:
         description.append(
             "% 12s: %s" % (mode.__name__, mode.__doc__.split("\n", 1)[0])
         )
+    description.append("\nSort types [ONLY --mode dirs --sort length IMPLEMENTED:")
+    for type_, text in SORTS.items():
+        description.append(f"{type_:>12}: {text}")
 
     parser = argparse.ArgumentParser(
         description="\n".join(description), formatter_class=Formatter
@@ -186,6 +196,17 @@ def make_parser():
         "--resume-from",
         metavar="PATH",
         help="skip paths before (alphabetically) PATH to resume interrupted indexing",
+    )
+    parser.add_argument(
+        "--sort",
+        metavar="TYPE",
+        help="Type of sorting, from list above.",
+    )
+    parser.add_argument(
+        "--reverse",
+        help="Reverse sorting.",
+        default=False,
+        action="store_true",
     )
 
     return parser
@@ -440,6 +461,20 @@ def summary(opt):
     )
 
 
+def sort_function(opt, subtype):
+    """Return a function for sorting output, X in a_list.sort(key=X).
+
+    Args:
+        opt (argparse opts): options incl. opt.sort (str)
+        subtype (str): dirs, files, dupes - type of thing being sorted
+
+    Returns:
+        function: function to get key from item
+    """
+    if opt.sort == "length":
+        return lambda x: len(x["path"])
+
+
 @mode
 def dirs(opt):
     """Dumps dirs
@@ -447,7 +482,16 @@ def dirs(opt):
     :param argparse.Namespace opt: command line options
     """
 
-    for n, data in enumerate(get_data(opt)):
+    if not opt.sort:
+        for n, data in enumerate(get_data(opt)):
+            print(data["path"])
+            if opt.show_n and n + 1 >= opt.show_n:
+                break
+        return
+
+    all_data = list(get_data(opt))
+    all_data.sort(key=sort_function(opt, "dirs"), reverse=opt.reverse)
+    for n, data in enumerate(all_data):
         print(data["path"])
         if opt.show_n and n + 1 >= opt.show_n:
             break
