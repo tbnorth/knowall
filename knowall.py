@@ -634,8 +634,7 @@ def dupe_dirs(opt):
         child_total = 0
         child_bytes_total = 0
 
-        print(node)
-        for key in sorted(node):
+        for key in node:
             if not isinstance(key, int):
                 child_hash, child_count, child_bytes = recur(
                     node[key], os.path.join(path, key)
@@ -663,7 +662,7 @@ def dupe_dirs(opt):
     for size, child_hash in hash_sizes:
         if len(hashes[(size, child_hash)]) < 2:
             continue
-        print(size)
+        print(f"{size:,}")
         for i in hashes[(size, child_hash)]:
             print(i)
         print()
@@ -677,7 +676,7 @@ def get_info_hash(fileinfo):
     :rtype: str
     """
 
-    return sha1(str([fileinfo.name, fileinfo.st_size])).hexdigest()
+    return sha1(str([fileinfo.name, fileinfo.st_size]).encode("utf8")).hexdigest()
 
 
 def get_list_hash(hash_list):
