@@ -645,6 +645,8 @@ def dupe_dirs(opt):
                     child_bytes_total += child_bytes
 
         for fileinfo in sorted(node[FILES]):
+            if fileinfo.st_size is None:
+                continue  # happens when Windows path length limit breaks things
             child_hashes.append(get_info_hash(fileinfo))
             child_total += 1
             child_bytes_total += fileinfo.st_size
