@@ -39,7 +39,7 @@ CHILD_FILES = 3
 CHILD_BYTES = 4
 
 # build list of modes available
-MODES = []
+MODES = {}
 
 SORTS = {
     "name": "Force alphabetical sorting, unsorted may be alphabetical and faster",
@@ -55,7 +55,7 @@ def mode(func):
     :param function func: function to add to list
     """
 
-    MODES.append(func)
+    MODES[func.__name__] = func
     return func
 
 
@@ -89,11 +89,11 @@ def make_parser():
         "Modes:",
     ]
 
-    for mode in MODES:
+    for mode in MODES.values():
         description.append(
             "% 12s: %s" % (mode.__name__, mode.__doc__.split("\n", 1)[0])
         )
-    description.append("\nSort types [ONLY --mode dirs --sort length IMPLEMENTED:")
+    description.append("\nSort types [ONLY --mode dirs --sort length IMPLEMENTED]:")
     for type_, text in SORTS.items():
         description.append(f"{type_:>12}: {text}")
 
@@ -101,7 +101,7 @@ def make_parser():
         description="\n".join(description), formatter_class=Formatter
     )
 
-    modenames = [i.__name__ for i in MODES]
+    modenames = list(MODES)
 
     def mode_check(x):
         if x not in modenames:
@@ -111,7 +111,7 @@ def make_parser():
     group = parser.add_argument_group("required arguments")
     group.add_argument(
         "--mode",
-        default=MODES[0].__name__,
+        default=modenames[0],
         help="mode from list above",
         type=mode_check,
     )
@@ -522,6 +522,7 @@ def files(opt):
                 return
 
 
+@lru_cache
 def hash_db_con_cur(dbpath):
     """Return connection to hash db, creating if necessary"""
 
@@ -539,6 +540,7 @@ def hash_db_con_cur(dbpath):
             "hash(filepath, st_size, st_mtime)"
         )
         con.commit()
+    cur.execute("PRAGMA main.synchronous = OFF")
     return con, cur
 
 
