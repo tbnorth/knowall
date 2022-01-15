@@ -186,7 +186,8 @@ def make_parser():
         default=False,
         action="store_true",
         help="don't hash possible dupes to check content, "
-        "just use size.  WARNING: may return false dupe listings",
+        "just use size.  WARNING: may return false dupe listings."
+        "NOTE: does not calc. *new* hashes, will still use hashes from --hash-db",
     )
     parser.add_argument(
         "--hash-db",
@@ -566,7 +567,6 @@ def find_hash(dbpath, filepath, fileinfo, no_hash=False):
         hashtexts = cur.fetchall()
         if hashtexts:
             hashtext = hashtexts[0][0]
-    del con, cur  # to allow syncing etc.
 
     if hashtext or no_hash:
         return hashtext or "no-hash"

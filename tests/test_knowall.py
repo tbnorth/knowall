@@ -2,26 +2,37 @@
 knowall tests - NOTE: test_default *must* run first (which, by default, it does).
 """
 import shutil
+import sqlite3
 import sys
 from io import StringIO
 from pathlib import Path
 
 import pytest
-from dateutil.parser import ParserError
 
 import knowall
 from tests.mkfakefs import makefilehier
+
+# from dateutil.parser import ParserError
+
 
 TEST_DATA = "test.jsonl"
 TEST_DB = "pytest_test.db"
 TOP_DIR = ["--top-dir", "testfs"]
 
 
+def query_hash_db(query):
+    con = sqlite3.connect(TEST_DB)
+    data = list(con.execute(query))
+    con.close()
+    return data
+
+
 @pytest.fixture(scope="session")
 def top_dir():
     """Create test file system (folder) and return path."""
     tempfs = TOP_DIR[1]
-    shutil.rmtree(tempfs)
+    if Path(tempfs).exists():
+        shutil.rmtree(tempfs)
     makefilehier(tempfs)
     return tempfs
 
@@ -36,6 +47,8 @@ def run_args(args=None, path_in=TEST_DATA):
     _out = StringIO()
     sys.stdout = _out
     knowall.main()
+    # To avoid sqlite3.OperationalError: attempt to write a readonly database:
+    knowall.hash_db_con_cur.cache_clear()
     out = _out.getvalue()
 
     sys.stdin = old_in
@@ -48,6 +61,7 @@ def run_args(args=None, path_in=TEST_DATA):
 # This test MUST RUN FIRST
 def test_default(top_dir):
     """Test creation of output file"""
+    print(top_dir)
     out = run_args(path_in=None)
     assert (
         '{"path": "testfs/gjuziyvlz/eoebtos/acvvqpvhuqkllvwlhs/v/judgkpoddlhw", '
@@ -58,32 +72,38 @@ def test_default(top_dir):
 
 
 def test_dupes():
+    Path(TEST_DB).unlink(missing_ok=True)
     out = run_args(["--mode", "dupes"])
+    assert not Path(TEST_DB).exists()
     assert "files: 8" in out
 
 
-def test_dupes_w_db():
-    if Path(TEST_DB).exists():
-        Path(TEST_DB).unlink()
-    out = run_args(["--mode", "dupes", "--hash-db", TEST_DB])
+def test_dupes_w_db_no_hash():
+    Path(TEST_DB).unlink(missing_ok=True)
+    out = run_args(
+        [
+            "--mode",
+            "dupes",
+            "--hash-db",
+            TEST_DB,
+            "--dupes-no-hash",
+            "--dupes-sort-n",
+            "--show-n",
+            "3",
+        ]
+    )
     assert Path(TEST_DB).exists()
+    assert (len(list(query_hash_db("select * from hash")))) == 0
     print(out)
 
-    # def test_dupes_w_db_no_hash():
-    #     # FIXME: make test test something
-    #     sys.argv[1:] = TOP_DIR + [
-    #         "--mode",
-    #         "dupes",
-    #         "--hash-db",
-    #         "test.db",
-    #         "--dupes-no-hash",
-    #         "--dupes-sort-n",
-    #         "--show-n",
-    #         "3",
-    #     ]
-    #     os.chdir(os.path.dirname(__file__))
-    #     sys.stdin = open(TEST_DATA)
-    #     knowall.main()
+
+def test_dupes_w_db():
+    Path(TEST_DB).unlink(missing_ok=True)
+    out = run_args(["--mode", "dupes", "--hash-db", TEST_DB])
+    assert Path(TEST_DB).exists()
+    print(list(Path().glob("*")))
+    assert "files: 8" in out
+    assert (len(list(query_hash_db("select * from hash")))) == 16
 
     # def test_files():
     #     # FIXME: make test test something
