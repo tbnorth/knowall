@@ -113,6 +113,33 @@ def test_dupes_w_db():
     assert (len(list(query_hash_db("select * from hash")))) == 16
 
 
+def hier_test(_):
+    return [
+        {"path": "/a", "files": ["x", "y"]},
+        {"path": "/a/b", "files": ["x", "z"]},
+        {"path": "/a/b/c", "files": ["z", "y"]},
+    ]
+
+
+def test_get_hier_db(mocker):
+    mocker.patch("knowall.get_data", new=hier_test)
+    print(knowall.get_hier_db(None))
+
+    # def test_files():
+    #     # FIXME: make test test something
+    #     sys.argv[1:] = TOP_DIR + [
+    #         "--mode",
+    #         "files",
+    #         "--show-time",
+    #         "M",
+    #         "--show-n",
+    #         "3",
+    #     ]
+    #     os.chdir(os.path.dirname(__file__))
+    #     sys.stdin = open(TEST_DATA)
+    #     knowall.main()
+
+
 def test_files():
     # Cannot test --show-time because testfs is modified every pytest run, so times
     # change

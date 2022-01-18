@@ -436,18 +436,33 @@ def get_flat_db(opt):
 def get_hier_db(opt):
     """get_hier_db - get hierarchical dir: paths dict
 
-    :param argparse.Namespace opt: command line options
-    :rtype: dict
+    FILES == 1, a non-string and therefore non-directory name key
+
+    Input:
+        {"path": "/a", "files": ["x", "y"]},
+        {"path": "/a/b", "files": ["x", "z"]},
+        {"path": "/a/b/c", "files": ["z", "y"]},
+    Output:
+        {1: [], 'a': {1: ['x', 'y'], 'b': {1: ['x', 'z'], 'c': {1: ['z', 'y']}}}}
+        i.e. a root with no files and one dir, 'a', which has two files and one dir 'b',
+        etc. etc.
+
+    Args:
+        opt (argparse.Namespace): options
+
+    Returns:
+        dict: hierarchical dict
     """
 
     db = {FILES: []}
 
     for data in get_data(opt):
-        insert = db
+        insert = db  # reset to top
         for path in data["path"].strip("/").split("/"):
             if path not in insert:
                 insert[path] = {FILES: []}
             insert = insert[path]
+        # files list from data goes in leaf node
         insert[FILES] = data["files"]
     return db
 
@@ -875,13 +890,17 @@ def dupe_dirs(opt):
     recur(db, "/")
 
     hash_sizes = sorted(hashes, reverse=True)
+    shown = 0
     for size, child_hash in hash_sizes:
         if len(hashes[(size, child_hash)]) < 2:
             continue
         print(f"{size:,}")
         for i in hashes[(size, child_hash)]:
             print(i)
+        shown += 1
         print()
+        if opt.show_n and shown >= opt.show_n:
+            break
 
 
 def get_info_hash(fileinfo):
