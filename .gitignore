@@ -1,6 +1,9 @@
 .coverage
 __pycache__
 htmlcov
+pytest_test.db
+test.jsonl
+testfs
 tests/test.db
 tests/test.jsonl
 tests/testfs
