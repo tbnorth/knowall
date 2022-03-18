@@ -8,3 +8,6 @@ tests/test.db
 tests/test.jsonl
 tests/testfs
 venv*
+
+#Ignore output folder
+output/

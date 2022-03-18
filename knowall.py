@@ -319,6 +319,23 @@ def get_hier_db(opt):
 
     return db
 
+def path_length_check(path):
+    """path_length_check - check if file can be found, if not, add prefix and check
+    :param str path: path to file
+    :return fixed filepath after checking if file exists (add prefix to long paths)
+    :rtype: str
+
+    """
+    #https://stackoverflow.com/questions/29557760/long-paths-in-python-on-windows
+    prefix = u'\\\\?\\'
+    #prefix = r"\\?\UNC" #Prefix to allow long file paths to work
+    if os.path.isfile(path): #File found as-is
+        return path
+    elif os.path.isfile(prefix+path): #File found with prefix
+        return prefix+path
+    else: #File can't be found, even with prefix, return None
+        return None
+
 
 def get_hash(path, callback=None):
     """get_hash - get hash for file
@@ -333,11 +350,17 @@ def get_hash(path, callback=None):
     import hashlib
 
     digest = hashlib.sha1()
-    try:
+    path = path_length_check(path)
+    if path:
         infile = open(path, "rb")
-    except FileNotFoundError:
+    else:
         # probably the Windows path length issue again
         return "NOFILEACCESS"
+    # try:
+    #     infile = open(path, "rb")
+    # except FileNotFoundError:
+    #     # probably the Windows path length issue again
+    #     return "NOFILEACCESS"
     read = 0
     while True:
         data = infile.read(buff_size)
@@ -369,14 +392,23 @@ def recur_stat(opt):
         out = {"path": uni(path), "files": []}
         for filename in files:
             filepath = os.path.join(path, filename)
-            try:
+            filepath = path_length_check(filepath)
+            if filepath: #Check if filepath is None (path_length_check failed)
                 count += 1
                 out["files"].append(tuple([uni(filename)]) + tuple(os.lstat(filepath)))
-            except FileNotFoundError:
+            else:
                 # hit Windows max path length
-                filepath = os.path.abspath(filepath)
+                filepath = os.path.abspath(os.path.join(path, filename))
                 sys.stderr.write(f"Can't open {len(filepath)} char. path {filepath}\n")
                 out["files"].append(tuple([uni(filename)]) + NULLSTAT)
+            # try:
+            #     count += 1
+            #     out["files"].append(tuple([uni(filename)]) + tuple(os.lstat(filepath)))
+            # except FileNotFoundError:
+            #     # hit Windows max path length
+            #     filepath = os.path.abspath(filepath)
+            #     sys.stderr.write(f"Can't open {len(filepath)} char. path {filepath}\n")
+            #     out["files"].append(tuple([uni(filename)]) + NULLSTAT)
 
         print(json.dumps(out))
         sys.stderr.write("%d %s\n" % (count, path))
@@ -523,7 +555,7 @@ def files(opt):
                 return
 
 
-@lru_cache
+@lru_cache()
 def hash_db_con_cur(dbpath):
     """Return connection to hash db, creating if necessary"""
 
@@ -545,7 +577,7 @@ def hash_db_con_cur(dbpath):
     return con, cur
 
 
-@lru_cache
+@lru_cache()
 def find_hash(dbpath, filepath, fileinfo, no_hash=False):
     """Find the hash for filepath, depending on hashing settings
 
@@ -781,7 +813,6 @@ def variants(opt):
 
 def main():
     """main - get options and dispatch mode"""
-
     opt = get_options(sys.argv[1:])
     start = time.time()
     globals()[opt.mode](opt)
