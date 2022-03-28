@@ -19,6 +19,7 @@ from datetime import datetime
 from functools import lru_cache
 from hashlib import sha1
 
+import folderstats
 from dateutil.parser import parse
 
 EPOCH = datetime(1970, 1, 1)
@@ -64,8 +65,7 @@ def uni(t):
 
 
 class Formatter(
-    argparse.ArgumentDefaultsHelpFormatter,
-    argparse.RawDescriptionHelpFormatter,
+    argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescriptionHelpFormatter,
 ):
     pass
 
@@ -96,7 +96,6 @@ def make_parser():
     description.append("\nSort types [ONLY --mode dirs --sort length IMPLEMENTED]:")
     for type_, text in SORTS.items():
         description.append(f"{type_:>12}: {text}")
-
     parser = argparse.ArgumentParser(
         description="\n".join(description), formatter_class=Formatter
     )
@@ -110,10 +109,7 @@ def make_parser():
 
     group = parser.add_argument_group("required arguments")
     group.add_argument(
-        "--mode",
-        default=modenames[0],
-        help="mode from list above",
-        type=mode_check,
+        "--mode", default=modenames[0], help="mode from list above", type=mode_check,
     )
 
     parser.add_argument(
@@ -157,12 +153,24 @@ def make_parser():
         "Use '^(?!.*<pattern>)' to exclude <pattern>, e.g. "
         '--file-filter "^(?!.*(jpg|dat))"',
     )
+    parser.add_argument(
+        "--ignore-hidden",
+        metavar="BOOL",
+        help="folderstats mode to ignore hidden files or not",
+        type=bool,
+        default=True,
+    )
+    parser.add_argument(
+        "--out-file",
+        metavar="FILE",
+        help="folderstats mode filename or path to save output to CSV",
+        type=str,
+        default="folderstats_mode_output.csv",
+    )
 
     for type_ in "creation", "modification", "access":
         parser.add_argument(
-            "--min-%stime" % type_[0],
-            help="Minimum %s time" % type_,
-            metavar="TIME",
+            "--min-%stime" % type_[0], help="Minimum %s time" % type_, metavar="TIME",
         )
         parser.add_argument(
             "--max-%stime" % type_[0],
@@ -199,15 +207,10 @@ def make_parser():
         help="skip paths before (alphabetically) PATH to resume interrupted indexing",
     )
     parser.add_argument(
-        "--sort",
-        metavar="TYPE",
-        help="Type of sorting, from list above.",
+        "--sort", metavar="TYPE", help="Type of sorting, from list above.",
     )
     parser.add_argument(
-        "--reverse",
-        help="Reverse sorting.",
-        default=False,
-        action="store_true",
+        "--reverse", help="Reverse sorting.", default=False, action="store_true",
     )
 
     return parser
@@ -296,7 +299,6 @@ def get_flat_db(opt):
 
     for data in get_data(opt):
         db[data["path"]] = data["files"]
-
     return db
 
 
@@ -316,8 +318,25 @@ def get_hier_db(opt):
                 insert[path] = {FILES: []}
             insert = insert[path]
         insert[FILES] = data["files"]
-
     return db
+
+
+def path_length_check(path):
+    """path_length_check - check if file can be found, if not, add prefix and check
+    :param str path: path to file
+    :return fixed filepath after checking if file exists (add prefix to long paths)
+    :rtype: str
+
+    """
+    # https://stackoverflow.com/questions/29557760/long-paths-in-python-on-windows
+    prefix = "\\\\?\\"
+    # prefix = r"\\?\UNC" #Prefix to allow long file paths to work
+    if os.path.isfile(path):  # File found as-is
+        return path
+    elif os.path.isfile(prefix + path):  # File found with prefix
+        return prefix + path
+    else:  # File can't be found, even with prefix, return None
+        return None
 
 
 def get_hash(path, callback=None):
@@ -333,9 +352,10 @@ def get_hash(path, callback=None):
     import hashlib
 
     digest = hashlib.sha1()
-    try:
+    path = path_length_check(path)
+    if path:
         infile = open(path, "rb")
-    except FileNotFoundError:
+    else:
         # probably the Windows path length issue again
         return "NOFILEACCESS"
     read = 0
@@ -369,15 +389,14 @@ def recur_stat(opt):
         out = {"path": uni(path), "files": []}
         for filename in files:
             filepath = os.path.join(path, filename)
-            try:
+            filepath = path_length_check(filepath)
+            if filepath:  # Check if filepath is None (path_length_check failed)
                 count += 1
                 out["files"].append(tuple([uni(filename)]) + tuple(os.lstat(filepath)))
-            except FileNotFoundError:
-                # hit Windows max path length
-                filepath = os.path.abspath(filepath)
+            else:  # hit Windows max path length
+                filepath = os.path.abspath(os.path.join(path, filename))
                 sys.stderr.write(f"Can't open {len(filepath)} char. path {filepath}\n")
                 out["files"].append(tuple([uni(filename)]) + NULLSTAT)
-
         print(json.dumps(out))
         sys.stderr.write("%d %s\n" % (count, path))
 
@@ -395,13 +414,11 @@ def find_ext(opt):
         for fileinfo in data["files"]:
             name, ext = os.path.splitext(fileinfo.name)
             exts[ext.upper()][data["path"]] += 1
-
     pathcount = defaultdict(lambda: defaultdict(lambda: 0))
 
     for ext in opt.extensions:
         for path in exts["." + ext]:
             pathcount[path][ext] = exts["." + ext][path]
-
     writer = csv.writer(sys.stdout)
     writer.writerow(opt.extensions + ["path"])
     order = sorted(
@@ -429,7 +446,6 @@ def rank_ext(opt):
             name, ext = os.path.splitext(fileinfo.name)
             exts[ext.upper()][data["path"]] += 1
             exts[ext.upper()]["__COUNT"] += 1
-
     counts = [[exts[i]["__COUNT"], i] for i in exts]
     counts.sort(reverse=True)
     for i in counts[: opt.show_n] if opt.show_n else counts:
@@ -455,7 +471,6 @@ def summary(opt):
                 nostat += 1
             else:
                 bytes += fileinfo.st_size
-
     print(
         f"{dirs:,d} folders, {files:,d} files, {bytes:,d} bytes, "
         f"no stats. {nostat:,d}"
@@ -489,7 +504,6 @@ def dirs(opt):
             if opt.show_n and n + 1 >= opt.show_n:
                 break
         return
-
     all_data = list(get_data(opt))
     all_data.sort(key=sort_function(opt, "dirs"), reverse=opt.reverse)
     for n, data in enumerate(all_data):
@@ -523,7 +537,7 @@ def files(opt):
                 return
 
 
-@lru_cache
+@lru_cache()
 def hash_db_con_cur(dbpath):
     """Return connection to hash db, creating if necessary"""
 
@@ -545,7 +559,7 @@ def hash_db_con_cur(dbpath):
     return con, cur
 
 
-@lru_cache
+@lru_cache()
 def find_hash(dbpath, filepath, fileinfo, no_hash=False):
     """Find the hash for filepath, depending on hashing settings
 
@@ -567,7 +581,6 @@ def find_hash(dbpath, filepath, fileinfo, no_hash=False):
         hashtexts = cur.fetchall()
         if hashtexts:
             hashtext = hashtexts[0][0]
-
     if hashtext or no_hash:
         return hashtext or "no-hash"
 
@@ -600,17 +613,14 @@ def get_dupes(opt):
         for filedata in data["files"]:
             fileinfo = FileInfo(*filedata)
             sizes[fileinfo.st_size].append((data["path"], fileinfo))
-
     # sort by size or count
     if opt.dupes_sort_n:
         order = sorted(sizes, reverse=True, key=lambda x: len(sizes[x]))
     else:
         order = sorted(sizes, reverse=True, key=lambda x: x or 0)
-
     for size in order:
         if len(sizes[size]) < 2:
             continue
-
         # within sizes with multiples, hash files, maybe
         hashed = defaultdict(list)
         for path, fileinfo in sizes[size]:
@@ -621,7 +631,6 @@ def get_dupes(opt):
             # can't yield this yet, reference to single file that may not be
             # a dupe
             hashed[(size, hashtext)].append(filepath)
-
         # now filter out singles and yield dupes
         yield {k: v for k, v in list(hashed.items()) if len(v) > 1}
 
@@ -655,11 +664,9 @@ def dupes(opt):
                 sizetext = f"{size or 0:,d}"
             print(sizetext, files_n, files)
             n += 1
-
         # might overshoot, but better to show complete sets of dupes
         if opt.show_n and n + 1 >= opt.show_n:
             break
-
     for k, v in stats.items():
         print(f"{k:>12s}: {v:,d}")
 
@@ -689,14 +696,12 @@ def dupe_dirs(opt):
                     child_hashes.append(child_hash)
                     child_total += child_count
                     child_bytes_total += child_bytes
-
         for fileinfo in sorted(node[FILES]):
             if fileinfo.st_size is None:
                 continue  # happens when Windows path length limit breaks things
             child_hashes.append(get_info_hash(fileinfo))
             child_total += 1
             child_bytes_total += fileinfo.st_size
-
         node[CHILD_HASH] = get_list_hash(child_hashes)
         node[CHILD_FILES] = child_total
         node[CHILD_BYTES] = child_bytes_total
@@ -750,7 +755,6 @@ def variants_add_hashes(opt, paths):
             no_hash=opt.dupes_no_hash,
         )
         ans.append((path, fileinfo, hashtext[:7] + " "))
-
     return ans
 
 
@@ -779,9 +783,27 @@ def variants(opt):
                 print(f"        {hash}{timestamp_text(fileinfo.st_ctime)} {path}")
 
 
+@mode
+def folderstats_pkg(opt):
+    """Recursively pull stats for all folders within an input path
+    using the folderstats package. This package works fast due to recursion 
+    and handles long paths (Windows limitation) through the use of os.scandir.
+    
+    Links: 
+        https://github.com/njanakiev/folderstats
+        https://bugs.python.org/issue33105 (see msg314126 Author: Eryk Sun (eryksun) Date: 2018-03-20 01:12)
+
+    :param argparse.Namespace opt: command line options
+    :return: pandas dataframe of folderstats output
+    """
+    df = folderstats.folderstats(opt.top_dir, ignore_hidden=opt.ignore_hidden)
+    # Export analysis
+    df.to_csv(opt.out_file)
+    return df
+
+
 def main():
     """main - get options and dispatch mode"""
-
     opt = get_options(sys.argv[1:])
     start = time.time()
     globals()[opt.mode](opt)
