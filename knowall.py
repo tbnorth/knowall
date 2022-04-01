@@ -297,10 +297,6 @@ def convert_input_file(inFile):
                 "ctime": "st_ctime",
             }
         )
-        # Fix leading network path to have enough backslashes to be valid
-        in_dat["path"] = in_dat["path"].apply(
-            lambda x: x.replace("\\\\aa", "\\\\\\\\aa", 1)
-        )
 
         # Add missing column(s) as empty 0 (nn lamba function)
         in_dat[list(set(FileInfo._fields) - set(in_dat.columns))] = 0
@@ -458,9 +454,8 @@ def get_hash(path, callback=None):
     import hashlib
 
     digest = hashlib.sha1()
-    path = path_length_check(path)
     if path:
-        infile = open(path, "rb")
+        infile = open(long_path(path), "rb")
     else:
         # probably the Windows path length issue again
         return "NOFILEACCESS"
@@ -474,6 +469,19 @@ def get_hash(path, callback=None):
         if len(data) != buff_size:
             break
     return digest.hexdigest()
+
+
+def long_path(path: str) -> str:
+    """Prependspecial prefixes to make long paths work in Windows"""
+    if len(path) < 3:  # "." etc.
+        return path
+    if path[0] == "\\":  # Windows \\sharename\path
+        path = path.lstrip("\\")
+        return f"\\\\?\\UNC\\{path}"
+    elif path[1] == ":":  # Windows C:/path/here
+        return f"\\\\?\\{path}"
+    else:
+        return path
 
 
 @mode
@@ -498,7 +506,9 @@ def recur_stat(opt):
             filepath = path_length_check(filepath)
             if filepath:  # Check if filepath is None (path_length_check failed)
                 count += 1
-                out["files"].append(tuple([uni(filename)]) + tuple(os.lstat(filepath)))
+                out["files"].append(
+                    tuple([uni(filename)]) + tuple(os.lstat(long_path(filepath)))
+                )
             else:  # hit Windows max path length
                 filepath = os.path.abspath(os.path.join(path, filename))
                 sys.stderr.write(f"Can't open {len(filepath)} char. path {filepath}\n")
@@ -772,7 +782,7 @@ def dupes(opt):
             print(sizetext, files_n, files)
             n += 1
         # might overshoot, but better to show complete sets of dupes
-        if opt.show_n and n + 1 >= opt.show_n:
+        if opt.show_n and n >= opt.show_n:
             break
     for k, v in stats.items():
         print(f"{k:>12s}: {v:,d}")

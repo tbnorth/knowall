@@ -1,6 +1,7 @@
 """
 knowall tests - NOTE: test_default *must* run first (which, by default, it does).
 """
+import os
 import shutil
 import sqlite3
 import sys
@@ -58,13 +59,21 @@ def run_args(args=None, path_in=TEST_DATA):
     return out
 
 
+def os_path(path: str) -> str:
+    # JSON encoding of Window's '\' is '\\\\', so string based comparisons are tricky
+    if os.sep == "\\":
+        return path.replace("/", "\\\\")
+    return path
+
 # This test MUST RUN FIRST
 def test_default(top_dir):
     """Test creation of output file"""
     print(top_dir)
     out = run_args(path_in=None)
+    path = os_path("testfs/gjuziyvlz/eoebtos/acvvqpvhuqkllvwlhs/v/judgkpoddlhw")
+    print(path)
     assert (
-        '{"path": "testfs/gjuziyvlz/eoebtos/acvvqpvhuqkllvwlhs/v/judgkpoddlhw", '
+        f'{{"path": "{path}", '
         '"files": []}' in out
     )
     with Path(TEST_DATA).open("w") as test_data:
