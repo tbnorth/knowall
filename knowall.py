@@ -15,15 +15,15 @@ import stat
 import sys
 import time
 from collections import defaultdict, namedtuple
-from datetime import datetime  # , timezone
+from datetime import datetime
 from functools import lru_cache
 from hashlib import sha1
-import pandas as pd
 
 import folderstats
+import pandas as pd
 from dateutil.parser import parse
 
-EPOCH = datetime(1970, 1, 1)  # , tzinfo=timezone.utc)
+EPOCH = datetime(1970, 1, 1)
 
 FileInfo = namedtuple(
     "FileInfo",
@@ -283,7 +283,7 @@ def convert_input_file(inFile):
         # Reformat input CSV into JSON format
         # Format 'path' column as an acceptable path string
         # https://stackoverflow.com/questions/65910282/jsondecodeerror-invalid-escape-when-parsing-from-python
-        regList = {r"([^\\])\\([^\\])": r"\1\\\\\2", r",(\s*])": r"\1", "\\a": "\\\\aa"}
+        regList = {r"([^\\])\\([^\\])": r"\1\\\\\2", r",(\s*])": r"\1"}
 
         in_dat["path"] = in_dat["path"].replace(regList, regex=True)
         # Rename columns
@@ -296,6 +296,10 @@ def convert_input_file(inFile):
                 "mtime": "st_mtime",
                 "ctime": "st_ctime",
             }
+        )
+        # Fix leading network path to have enough backslashes to be valid
+        in_dat["path"] = in_dat["path"].apply(
+            lambda x: x.replace("\\\\aa", "\\\\\\\\aa", 1)
         )
 
         # Add missing column(s) as empty 0 (nn lamba function)
@@ -727,8 +731,7 @@ def get_dupes(opt):
         hashed = defaultdict(list)
         for path, fileinfo in sizes[size]:
             filepath = os.path.join(path, fileinfo.name)
-            if filepath.startswith("\\aa"):
-                filepath = filepath.replace("\\aa", "\\\\aa", 1)  # Fix start of path
+
             hashtext = find_hash(
                 opt.hash_db, filepath, fileinfo, no_hash=opt.dupes_no_hash
             )
@@ -853,8 +856,6 @@ def variants_add_hashes(opt, paths):
     ans = []
     for path, fileinfo in paths:
         filepath = os.path.join(path, fileinfo.name)
-        if filepath.startswith("\\aa"):
-            filepath = filepath.replace("\\aa", "\\\\aa", 1)  # Fix start of path
         hashtext = find_hash(
             opt.hash_db, filepath, fileinfo, no_hash=opt.dupes_no_hash,
         )
