@@ -20,6 +20,7 @@ from functools import lru_cache
 from hashlib import sha1
 
 import folderstats
+import pandas as pd
 from dateutil.parser import parse
 
 EPOCH = datetime(1970, 1, 1)
@@ -244,6 +245,106 @@ def get_options(args=None):
     return opt
 
 
+def correctSingleQuoteJSON(s):
+    """Correct single quote strings to correct JSON format expecting double quote
+    Helper function from: https://stackoverflow.com/questions/47659782/python-how-convert-single-quotes-to-double-quotes-to-format-as-json-string
+    """
+    rstr = ""
+    escaped = False
+
+    for c in s:
+
+        if c == "'" and not escaped:
+            c = '"'  # replace single with double quote
+        elif c == "'" and escaped:
+            rstr = rstr[:-1]  # remove escape character before single quotes
+        escaped = c == "\\"  # check for an escape character
+        rstr += c  # append the correct json
+    return rstr
+
+
+def convert_input_file(inFile):
+    """convert_input_file - Check input file type and convert to expected JSON
+    
+    :param sys.stdin <_io.TextIOWrapper name='<stdin>' mode='r' encoding='cp1252'> inFile: command line redirected input (<)
+    
+    """
+    try:  # Read first line and check if JSON
+        json.loads(inFile.readline())
+        inFile.seek(0)  # Reset back to line 0
+        return inFile
+    except:  # If lines aren't JSON, then try CSV
+        try:
+            inFile.seek(0)  # Reset back to line 0
+            in_dat = pd.read_csv(inFile)
+        except:  # Only allow JSON or CSV input at this time
+            print("...Error...Input file is not JSON or CSV")
+            raise
+        # Reformat input CSV into JSON format
+        # Format 'path' column as an acceptable path string
+        # https://stackoverflow.com/questions/65910282/jsondecodeerror-invalid-escape-when-parsing-from-python
+        regList = {r"([^\\])\\([^\\])": r"\1\\\\\2", r",(\s*])": r"\1"}
+
+        in_dat["path"] = in_dat["path"].replace(regList, regex=True)
+        # Rename columns
+        in_dat = in_dat.rename(
+            columns={
+                "name": "name",
+                "uid": "st_uid",
+                "size": "st_size",
+                "atime": "st_atime",
+                "mtime": "st_mtime",
+                "ctime": "st_ctime",
+            }
+        )
+
+        # Add missing column(s) as empty 0 (nn lamba function)
+        in_dat[list(set(FileInfo._fields) - set(in_dat.columns))] = 0
+
+        # Convert time columns from text to numeric (based on get_options() logic)
+        # in_dat = in_dat.apply(lambda x: int((parse(x) - EPOCH).total_seconds()) if x.name in ['st_atime', 'st_mtime', 'st_ctime'] else x)
+        in_dat["st_atime"] = in_dat["st_atime"].apply(
+            lambda x: int((parse(x) - EPOCH).total_seconds())
+        )
+        in_dat["st_mtime"] = in_dat["st_mtime"].apply(
+            lambda x: int((parse(x) - EPOCH).total_seconds())
+        )
+        in_dat["st_ctime"] = in_dat["st_ctime"].apply(
+            lambda x: int((parse(x,) - EPOCH).total_seconds())
+        )
+
+        # Get list of directory paths
+        in_dirs = in_dat.loc[in_dat["folder"] == True].copy()
+        # Get just files (not directories)
+        in_files = in_dat.loc[in_dat["folder"] == False].copy()
+        del in_dat
+        # Fill nan extension with empty string
+        in_files["extension"] = in_files["extension"].fillna("")
+        # Combine name and extension columns
+        in_files["name"] = in_files["name"] + "." + in_files["extension"]
+        # Create dictionary of files by directory paths
+        # in_dat.loc[in_dat.parent == in_dirs.id[x]]
+        inFile = {
+            in_dirs.path[x]:
+            # Convert dataframe rows to list of lists
+            [
+                row.tolist()
+                for i, row in in_files[list(FileInfo._fields)]
+                .loc[in_files.parent == in_dirs.id[x]]
+                .iterrows()
+            ]
+            for x in in_dirs.index
+        }
+        # Convert to JSON list
+        inFile = [
+            correctSingleQuoteJSON(
+                r'{"path": ' + rf'"{str(key)}", "files":{str(value)}}}'
+            )
+            for key, value in inFile.items()
+        ]
+        return inFile
+
+
 def get_data(opt):
     """get_data - generator, read data, applying filters
 
@@ -265,7 +366,8 @@ def get_data(opt):
     )
 
     nn = lambda x: x if x is not None else 0
-
+    # Check/Handle Input file Format to JSON
+    sys.stdin = convert_input_file(sys.stdin)
     for line in sys.stdin:
         data = json.loads(line)
         data["files"] = [FileInfo._make(i) for i in data["files"]]
@@ -352,9 +454,8 @@ def get_hash(path, callback=None):
     import hashlib
 
     digest = hashlib.sha1()
-    path = path_length_check(path)
     if path:
-        infile = open(path, "rb")
+        infile = open(long_path(path), "rb")
     else:
         # probably the Windows path length issue again
         return "NOFILEACCESS"
@@ -368,6 +469,19 @@ def get_hash(path, callback=None):
         if len(data) != buff_size:
             break
     return digest.hexdigest()
+
+
+def long_path(path: str) -> str:
+    """Prependspecial prefixes to make long paths work in Windows"""
+    if len(path) < 3:  # "." etc.
+        return path
+    if path[0] == "\\":  # Windows \\sharename\path
+        path = path.lstrip("\\")
+        return f"\\\\?\\UNC\\{path}"
+    elif path[1] == ":":  # Windows C:/path/here
+        return f"\\\\?\\{path}"
+    else:
+        return path
 
 
 @mode
@@ -392,7 +506,9 @@ def recur_stat(opt):
             filepath = path_length_check(filepath)
             if filepath:  # Check if filepath is None (path_length_check failed)
                 count += 1
-                out["files"].append(tuple([uni(filename)]) + tuple(os.lstat(filepath)))
+                out["files"].append(
+                    tuple([uni(filename)]) + tuple(os.lstat(long_path(filepath)))
+                )
             else:  # hit Windows max path length
                 filepath = os.path.abspath(os.path.join(path, filename))
                 sys.stderr.write(f"Can't open {len(filepath)} char. path {filepath}\n")
@@ -625,6 +741,7 @@ def get_dupes(opt):
         hashed = defaultdict(list)
         for path, fileinfo in sizes[size]:
             filepath = os.path.join(path, fileinfo.name)
+
             hashtext = find_hash(
                 opt.hash_db, filepath, fileinfo, no_hash=opt.dupes_no_hash
             )
@@ -665,7 +782,7 @@ def dupes(opt):
             print(sizetext, files_n, files)
             n += 1
         # might overshoot, but better to show complete sets of dupes
-        if opt.show_n and n + 1 >= opt.show_n:
+        if opt.show_n and n >= opt.show_n:
             break
     for k, v in stats.items():
         print(f"{k:>12s}: {v:,d}")
@@ -748,11 +865,9 @@ def variants_add_hashes(opt, paths):
         return [i + ("",) for i in paths]
     ans = []
     for path, fileinfo in paths:
+        filepath = os.path.join(path, fileinfo.name)
         hashtext = find_hash(
-            opt.hash_db,
-            os.path.join(path, fileinfo.name),
-            fileinfo,
-            no_hash=opt.dupes_no_hash,
+            opt.hash_db, filepath, fileinfo, no_hash=opt.dupes_no_hash,
         )
         ans.append((path, fileinfo, hashtext[:7] + " "))
     return ans
