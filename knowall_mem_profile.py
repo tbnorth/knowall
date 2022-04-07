@@ -1,9 +1,12 @@
+# -*- coding: utf-8 -*-
 """
-knowall.py - recursively stat a directory, dump results,
-analyze dumped results
+Profiling version of knowall.py
 
-Terry Brown, terrynbrown@gmail.com, Fri Jun 24 15:28:45 2016
+Created on Mon Apr  4 13:52:10 2022
+
+@author: JWALL01
 """
+from memory_profiler import profile
 
 import argparse
 import csv
@@ -48,7 +51,7 @@ MODES = {}
 
 SORTS = {
     "name": "Force alphabetical sorting, unsorted may be alphabetical and faster",
-    "count": "Sort dirs / dupes by file count (dupes defaults to total size)",
+    "count": "Sort dirs / dupes by file count (dupes  \n defaults to total size)",
     "size": "Sort dirs by size",
     "length": "Sort by path length",
 }
@@ -423,6 +426,7 @@ def check_input_file_type():
             raise
 
 
+@profile
 def get_data_ext(opt):
     """get_data_ext - generator, read data, applying filters
 
@@ -444,7 +448,7 @@ def get_data_ext(opt):
     )
 
     nn = lambda x: x if x is not None else 0
-
+    # Get input file type (JSON vs. CSV)
     input_file_type = check_input_file_type()
 
     if input_file_type == "json":  # Process JSON data
@@ -503,7 +507,7 @@ def get_data_ext(opt):
                 st_ctime=int((parse(line.st_ctime) - EPOCH).total_seconds()),
             )
 
-            if line.folder == "True":
+            if line.folder == "True":  # Found a folder, process files and yield
                 # handle case where dir is ID 0
                 # if line.id == "1":
                 #     print("...Processing final root folders...")
@@ -511,8 +515,8 @@ def get_data_ext(opt):
                 #     file_list.extend(dir_list)
                 # else:  # Add to dir list
                 #     dir_list.append(line)
-                # JSON transformation
 
+                # JSON transformation
                 data = {"path": line.path, "files": file_list}
                 # reset the file_list
                 file_list = []
@@ -545,6 +549,7 @@ def get_data_ext(opt):
         raise
 
 
+@profile
 def get_data(opt):
     """get_data - generator, read data, applying filters
 
@@ -903,6 +908,7 @@ def find_hash(dbpath, filepath, fileinfo, no_hash=False):
     return hashtext
 
 
+@profile
 def get_dupes(opt):
     """Find duplicate files
 
@@ -911,7 +917,7 @@ def get_dupes(opt):
 
     # group by size
     sizes = defaultdict(lambda: [])
-    for data in get_data(opt):
+    for data in get_data_ext(opt):
         for filedata in data["files"]:
             try:
                 fileinfo = FileInfo(*filedata)
@@ -940,6 +946,7 @@ def get_dupes(opt):
         yield {k: v for k, v in list(hashed.items()) if len(v) > 1}
 
 
+@profile
 @mode
 def dupes(opt):
     """Print duplicate files
