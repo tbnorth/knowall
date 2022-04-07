@@ -352,51 +352,6 @@ def convert_input_file(inFile):
         return inFile
 
 
-def convert_input_file_stream(inFile):
-    """convert_input_file_stream - Check input file type and convert to expected JSON, just streaming the conversion
-    
-    :param sys.stdin <_io.TextIOWrapper name='<stdin>' mode='r' encoding='cp1252'> inFile: command line redirected input (<)
-    
-    """
-    try:  # Read first line and check if JSON
-        json.loads(inFile.readline())
-        inFile.seek(0)  # Reset back to line 0
-        return inFile
-    except:  # If lines aren't JSON, then try CSV
-        try:
-            inFile.seek(0)  # Reset back to line 0
-            # Get header for namedtuple
-            header = next(inFile)
-            # Set named tuple
-            FileInfo_CSV = namedtuple(
-                "FileInfo_CSV", "index " + header.replace(",", " ").replace("\n", ""),
-            )
-
-            dir_list = []
-            file_list = []
-            for line in inFile:
-                line = FileInfo_CSV._make(line.split(","))
-                if line.folder == "True":
-                    # handle case where dir is ID 0
-                    if line.id == "1":
-                        return {"path": line.path, "files": file_list}
-                    # Add to dir list
-                    dir_list.append(line)
-                    # JSON transformation
-                    tmp = {"path": line.path, "files": file_list}
-                    # reset the file_list
-                    file_list = []
-                    # yield the JSON transformation
-                    yield tmp
-                else:
-                    file_list.append(line)
-            # yield JSON transformation for root (ID 0) grouping with dir_list
-        except:  # Only allow JSON or CSV input at this time
-            print("...Error...Input file is not JSON or CSV")
-            raise
-    return None
-
-
 def check_input_file_type():
     """"check_input_file_type - check if input file sys.stdin type supported (JSON or CSV)
     
