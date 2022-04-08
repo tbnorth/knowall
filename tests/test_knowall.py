@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 import knowall
+import argparse
 from tests.mkfakefs import makefilehier
 
 # from dateutil.parser import ParserError
@@ -65,6 +66,7 @@ def os_path(path: str) -> str:
         return path.replace("/", "\\\\")
     return path
 
+
 # This test MUST RUN FIRST
 def test_default(top_dir):
     """Test creation of output file"""
@@ -72,10 +74,7 @@ def test_default(top_dir):
     out = run_args(path_in=None)
     path = os_path("testfs/gjuziyvlz/eoebtos/acvvqpvhuqkllvwlhs/v/judgkpoddlhw")
     print(path)
-    assert (
-        f'{{"path": "{path}", '
-        '"files": []}' in out
-    )
+    assert f'{{"path": "{path}", ' '"files": []}' in out
     with Path(TEST_DATA).open("w") as test_data:
         test_data.write(out)
 
@@ -114,40 +113,50 @@ def test_dupes_w_db():
     assert "files: 8" in out
     assert (len(list(query_hash_db("select * from hash")))) == 16
 
-    # def test_files():
-    #     # FIXME: make test test something
-    #     sys.argv[1:] = TOP_DIR + [
-    #         "--mode",
-    #         "files",
-    #         "--show-time",
-    #         "M",
-    #         "--show-n",
-    #         "3",
-    #     ]
-    #     os.chdir(os.path.dirname(__file__))
-    #     sys.stdin = open(TEST_DATA)
-    #     knowall.main()
 
-    # def test_dirs():
-    #     # FIXME: make test test something
-    #     sys.argv[1:] = TOP_DIR + ["--mode", "dirs", "--show-n", "3"]
-    #     os.chdir(os.path.dirname(__file__))
-    #     sys.stdin = open(TEST_DATA)
-    #     knowall.main()
+def test_files():
+    # Cannot test --show-time because testfs is modified every pytest run, so times change
+    out = run_args(["--mode", "files", "--show-n", "3"])
+    out = [os_path(x) for x in out.split("\n") if x]
+    # Check show-n matched 3
+    assert (len(out)) == 3
+    # Check files listed are correct
+    assert all(
+        item in out
+        for item in [
+            "testfs\\bcafptrwhakwsdkkdufy",
+            "testfs\\gsjwwefnlasqcrshfad",
+            "testfs\\nvtwlwaryzx",
+        ]
+    )
 
-    # def test_summary():
-    #     # FIXME: make test test something
-    #     sys.argv[1:] = TOP_DIR + ["--mode", "summary"]
-    #     os.chdir(os.path.dirname(__file__))
-    #     sys.stdin = open(TEST_DATA)
-    #     knowall.main()
+
+def test_dirs():
+    # FIXME: make test test something
+    out = run_args(["--mode", "dirs", "--show-n", "3"])
+    out = [os_path(x) for x in out.split("\n") if x]
+    # Check show-n matched 3
+    assert (len(out)) == 3
+    # Check files listed are correct
+    assert all(
+        item in out
+        for item in [
+            "testfs",
+            "testfs\\gjuziyvlz",
+            "testfs\\gjuziyvlz\\eoebtos",
+        ]
+    )
+
+
+def test_summary():
+    # FIXME: make test test something
+    out = run_args(["--mode", "summary"])
+    assert out == "27 folders, 96 files, 5,474,741 bytes, no stats. 0\n"
 
     # def test_find_ext():
     #     # FIXME: make test test something
-    #     sys.argv[1:] = TOP_DIR + ["--mode", "find_ext"]
-    #     os.chdir(os.path.dirname(__file__))
-    #     sys.stdin = open(TEST_DATA)
-    #     knowall.main()
+    #     # Need to add test files with extensions first...
+    #     out = run_args(["--mode", "find_ext"])
 
     # def test_rank_ext():
     #     # FIXME: make test test something
@@ -213,13 +222,14 @@ def test_dupes_w_db():
     #     with pytest.raises(ParserError):
     #         knowall.main()
 
-    # def test_nonexistentmode():
-    #     # FIXME: make test test something
-    #     sys.argv[1:] = TOP_DIR + ["--mode", "nonexistentmode"]
-    #     os.chdir(os.path.dirname(__file__))
-    #     sys.stdin = open(TEST_DATA)
-    #     with pytest.raises(SystemExit):
-    #         knowall.main()
+
+def test_nonexistentmode(capsys):
+    # https://stackoverflow.com/questions/30256332/verify-the-error-code-or-message-from-systemexit-in-pytest
+    # Have to run with python -m pytest --capture=sys for it to work
+    with pytest.raises(SystemExit):
+        run_args(["--mode", "nonexistentmode"])
+    out, err = capsys.readouterr()
+    assert "error: argument --mode: nonexistentmode not in" in err
 
     # def test_resume_from():
     #     # FIXME: make test test something
