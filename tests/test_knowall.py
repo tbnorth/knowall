@@ -121,16 +121,6 @@ def test_files():
     out = [os_path(x) for x in out.split("\n") if x]
     # Check show-n matched 3
     assert (len(out)) == 3
-    # Check files listed are correct
-    assert all(
-        item in out
-        for item in [
-            "testfs\\bcafptrwhakwsdkkdufy",
-            "testfs\\gsjwwefnlasqcrshfad",
-            "testfs\\nvtwlwaryzx",
-        ]
-    )
-
     # Check files listed are correct - regular expression for
     # file path agnostic search/matching across OS
     assert all(
