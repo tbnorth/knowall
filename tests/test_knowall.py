@@ -7,6 +7,7 @@ import sqlite3
 import sys
 from io import StringIO
 from pathlib import Path
+import re
 
 import pytest
 
@@ -130,6 +131,19 @@ def test_files():
         ]
     )
 
+    # Check files listed are correct - regular expression for
+    # file path agnostic search/matching across OS
+    assert all(
+        [
+            re.search(item, "\n".join(out), re.MULTILINE)
+            for item in [
+                r"^testfs[/\\]bcafptrwhakwsdkkdufy",
+                r"^testfs[/\\]gsjwwefnlasqcrshfad",
+                r"^testfs[/\\]nvtwlwaryzx",
+            ]
+        ]
+    )
+
 
 def test_dirs():
     # FIXME: make test test something
@@ -137,13 +151,16 @@ def test_dirs():
     out = [os_path(x) for x in out.split("\n") if x]
     # Check show-n matched 3
     assert (len(out)) == 3
-    # Check files listed are correct
+    # Check files listed are correct - regular expression for
+    # file path agnostic search/matching across OS
     assert all(
-        item in out
-        for item in [
-            "testfs",
-            "testfs\\gjuziyvlz",
-            "testfs\\gjuziyvlz\\eoebtos",
+        [
+            re.search(item, "\n".join(out), re.MULTILINE)
+            for item in [
+                r"^testfs",
+                r"^testfs[/\\]gjuziyvlz",
+                r"^testfs[/\\]gjuziyvlz[/\\]eoebtos",
+            ]
         ]
     )
 
