@@ -7,12 +7,10 @@ import sqlite3
 import sys
 from io import StringIO
 from pathlib import Path
-import re
 
 import pytest
 
 import knowall
-import argparse
 from tests.mkfakefs import makefilehier
 
 # from dateutil.parser import ParserError
@@ -116,23 +114,17 @@ def test_dupes_w_db():
 
 
 def test_files():
-    # Cannot test --show-time because testfs is modified every pytest run, so times change
+    # Cannot test --show-time because testfs is modified every pytest run, so times
+    # change
     out = run_args(["--mode", "files", "--show-n", "3"])
     out = [os_path(x) for x in out.split("\n") if x]
     # Check show-n matched 3
     assert (len(out)) == 3
-    # Check files listed are correct - regular expression for
-    # file path agnostic search/matching across OS
-    assert all(
-        [
-            re.search(item, "\n".join(out), re.MULTILINE)
-            for item in [
-                r"^testfs[/\\]bcafptrwhakwsdkkdufy",
-                r"^testfs[/\\]gsjwwefnlasqcrshfad",
-                r"^testfs[/\\]nvtwlwaryzx",
-            ]
-        ]
-    )
+    # Check files listed are correct
+    # file ordering varies by OS, so exactly 3 of these should match
+    all_files = set(i for i in Path("testfs").glob("**/*") if i.is_file())
+    three_files = set(Path(i) for i in out)
+    assert len(all_files & three_files) == 3
 
 
 def test_dirs():
@@ -141,18 +133,11 @@ def test_dirs():
     out = [os_path(x) for x in out.split("\n") if x]
     # Check show-n matched 3
     assert (len(out)) == 3
-    # Check files listed are correct - regular expression for
-    # file path agnostic search/matching across OS
-    assert all(
-        [
-            re.search(item, "\n".join(out), re.MULTILINE)
-            for item in [
-                r"^testfs",
-                r"^testfs[/\\]gjuziyvlz",
-                r"^testfs[/\\]gjuziyvlz[/\\]eoebtos",
-            ]
-        ]
-    )
+    # Check files listed are correct
+    # file ordering varies by OS, so exactly 3 of these should match
+    all_dirs = set(Path("testfs").glob("**"))
+    three_dirs = set(Path(i) for i in out)
+    assert len(all_dirs & three_dirs) == 3
 
 
 def test_summary():
