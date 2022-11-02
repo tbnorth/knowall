@@ -19,8 +19,11 @@ from datetime import datetime
 from functools import lru_cache
 from hashlib import sha1
 
-import folderstats
-import pandas as pd
+try:
+    import folderstats
+    import pandas as pd
+except ImportError:
+    pass  # fail later, not needed for most operations
 from dateutil.parser import parse
 
 EPOCH = datetime(1970, 1, 1)
@@ -66,7 +69,8 @@ def uni(t):
 
 
 class Formatter(
-    argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescriptionHelpFormatter,
+    argparse.ArgumentDefaultsHelpFormatter,
+    argparse.RawDescriptionHelpFormatter,
 ):
     pass
 
@@ -94,7 +98,9 @@ def make_parser():
         description.append(
             "% 12s: %s" % (mode.__name__, mode.__doc__.split("\n", 1)[0])
         )
-    description.append("\nSort types [ONLY --mode dirs --sort length IMPLEMENTED]:")
+    description.append(
+        "\nSort types [ONLY --mode dirs --sort length IMPLEMENTED]:"
+    )
     for type_, text in SORTS.items():
         description.append(f"{type_:>12}: {text}")
     parser = argparse.ArgumentParser(
@@ -110,7 +116,10 @@ def make_parser():
 
     group = parser.add_argument_group("required arguments")
     group.add_argument(
-        "--mode", default=modenames[0], help="mode from list above", type=mode_check,
+        "--mode",
+        default=modenames[0],
+        help="mode from list above",
+        type=mode_check,
     )
 
     parser.add_argument(
@@ -171,7 +180,9 @@ def make_parser():
 
     for type_ in "creation", "modification", "access":
         parser.add_argument(
-            "--min-%stime" % type_[0], help="Minimum %s time" % type_, metavar="TIME",
+            "--min-%stime" % type_[0],
+            help="Minimum %s time" % type_,
+            metavar="TIME",
         )
         parser.add_argument(
             "--max-%stime" % type_[0],
@@ -180,7 +191,8 @@ def make_parser():
         )
     parser.add_argument(
         "--show-time",
-        help="Any combination of 'C', 'M', 'A', e.g. MA, times " "to show in file mode",
+        help="Any combination of 'C', 'M', 'A', e.g. MA, times "
+        "to show in file mode",
         metavar="TIMES",
     )
 
@@ -208,10 +220,15 @@ def make_parser():
         help="skip paths before (alphabetically) PATH to resume interrupted indexing",
     )
     parser.add_argument(
-        "--sort", metavar="TYPE", help="Type of sorting, from list above.",
+        "--sort",
+        metavar="TYPE",
+        help="Type of sorting, from list above.",
     )
     parser.add_argument(
-        "--reverse", help="Reverse sorting.", default=False, action="store_true",
+        "--reverse",
+        help="Reverse sorting.",
+        default=False,
+        action="store_true",
     )
 
     return parser
@@ -230,24 +247,31 @@ def get_options(args=None):
     for attr in "file", "path":
         regex = getattr(opt, attr + "_filter")
         if regex:
-            setattr(opt, attr + "_filter", re.compile(regex, flags=re.IGNORECASE))
+            setattr(
+                opt, attr + "_filter", re.compile(regex, flags=re.IGNORECASE)
+            )
     # convert time text to time
     for end in "min", "max":
         for type_ in "cma":  # ctime, mtime, atime - create, modify, access
             text = "%s_%stime" % (end, type_)
             if getattr(opt, text):
                 try:
-                    timestamp = int((parse(getattr(opt, text)) - EPOCH).total_seconds())
+                    timestamp = int(
+                        (parse(getattr(opt, text)) - EPOCH).total_seconds()
+                    )
                     setattr(opt, text, timestamp)
                 except Exception:
-                    print("Failed parsing %s '%s'" % (text, getattr(opt, text)))
+                    print(
+                        "Failed parsing %s '%s'" % (text, getattr(opt, text))
+                    )
                     raise
     return opt
 
 
 def correctSingleQuoteJSON(s):
     """Correct single quote strings to correct JSON format expecting double quote
-    Helper function from: https://stackoverflow.com/questions/47659782/python-how-convert-single-quotes-to-double-quotes-to-format-as-json-string
+    Helper function from: https://stackoverflow.com/questions/47659782/python-how-
+    convert-single-quotes-to-double-quotes-to-format-as-json-string
     """
     rstr = ""
     escaped = False
@@ -265,9 +289,10 @@ def correctSingleQuoteJSON(s):
 
 def convert_input_file(inFile):
     """convert_input_file - Check input file type and convert to expected JSON
-    
-    :param sys.stdin <_io.TextIOWrapper name='<stdin>' mode='r' encoding='cp1252'> inFile: command line redirected input (<)
-    
+
+    :param sys.stdin <_io.TextIOWrapper name='<stdin>' mode='r' encoding='cp1252'>
+    inFile: command line redirected input (<)
+
     """
     try:  # Read first line and check if JSON
         json.loads(inFile.readline())
@@ -302,7 +327,8 @@ def convert_input_file(inFile):
         in_dat[list(set(FileInfo._fields) - set(in_dat.columns))] = 0
 
         # Convert time columns from text to numeric (based on get_options() logic)
-        # in_dat = in_dat.apply(lambda x: int((parse(x) - EPOCH).total_seconds()) if x.name in ['st_atime', 'st_mtime', 'st_ctime'] else x)
+        # in_dat = in_dat.apply(lambda x: int((parse(x) - EPOCH).total_seconds()) if
+        # x.name in ['st_atime', 'st_mtime', 'st_ctime'] else x)
         in_dat["st_atime"] = in_dat["st_atime"].apply(
             lambda x: int((parse(x) - EPOCH).total_seconds())
         )
@@ -310,7 +336,14 @@ def convert_input_file(inFile):
             lambda x: int((parse(x) - EPOCH).total_seconds())
         )
         in_dat["st_ctime"] = in_dat["st_ctime"].apply(
-            lambda x: int((parse(x,) - EPOCH).total_seconds())
+            lambda x: int(
+                (
+                    parse(
+                        x,
+                    )
+                    - EPOCH
+                ).total_seconds()
+            )
         )
 
         # Get list of directory paths
@@ -504,14 +537,19 @@ def recur_stat(opt):
         for filename in files:
             filepath = os.path.join(path, filename)
             filepath = path_length_check(filepath)
-            if filepath:  # Check if filepath is None (path_length_check failed)
+            if (
+                filepath
+            ):  # Check if filepath is None (path_length_check failed)
                 count += 1
                 out["files"].append(
-                    tuple([uni(filename)]) + tuple(os.lstat(long_path(filepath)))
+                    tuple([uni(filename)])
+                    + tuple(os.lstat(long_path(filepath)))
                 )
             else:  # hit Windows max path length
                 filepath = os.path.abspath(os.path.join(path, filename))
-                sys.stderr.write(f"Can't open {len(filepath)} char. path {filepath}\n")
+                sys.stderr.write(
+                    f"Can't open {len(filepath)} char. path {filepath}\n"
+                )
                 out["files"].append(tuple([uni(filename)]) + NULLSTAT)
         print(json.dumps(out))
         sys.stderr.write("%d %s\n" % (count, path))
@@ -554,6 +592,14 @@ def rank_ext(opt):
     :param argparse.Namespace opt: command line options
     """
 
+    counts = ranked_extensions(opt)
+
+    for i in counts[: opt.show_n] if opt.show_n else counts:
+        print("% 5d %s" % tuple(i))
+
+
+def ranked_extensions(opt):
+
     exts = defaultdict(lambda: defaultdict(lambda: 0))
 
     for data in get_data(opt):
@@ -564,8 +610,7 @@ def rank_ext(opt):
             exts[ext.upper()]["__COUNT"] += 1
     counts = [[exts[i]["__COUNT"], i] for i in exts]
     counts.sort(reverse=True)
-    for i in counts[: opt.show_n] if opt.show_n else counts:
-        print("% 5d %s" % tuple(i))
+    return counts
 
 
 @mode
@@ -575,22 +620,27 @@ def summary(opt):
     :param argparse.Namespace opt: command line options
     """
 
-    dirs = files = bytes = nostat = 0
+    statistics = stats(opt)
+    print(
+        "{dirs:,d} folders, {files:,d} files, {bytes:,d} bytes, "
+        "no stats. {nostat:,d}".format_map(statistics)
+    )
+
+
+def stats(opt):
+    res = defaultdict(int)
 
     for data in get_data(opt):
 
-        dirs += 1
+        res["dirs"] += 1
 
         for fileinfo in data["files"]:
-            files += 1
+            res["files"] += 1
             if fileinfo.st_size is None:
-                nostat += 1
+                res["nostat"] += 1
             else:
-                bytes += fileinfo.st_size
-    print(
-        f"{dirs:,d} folders, {files:,d} files, {bytes:,d} bytes, "
-        f"no stats. {nostat:,d}"
-    )
+                res["bytes"] += fileinfo.st_size
+    return res
 
 
 def sort_function(opt, subtype):
@@ -635,6 +685,11 @@ def files(opt):
     :param argparse.Namespace opt: command line options
     """
 
+    for file_ in list_files(opt):
+        print(file_)
+
+
+def list_files(opt):
     count = 0
     for data in get_data(opt):
         for fileinfo in data["files"]:
@@ -647,7 +702,7 @@ def files(opt):
                 }.get(i.lower())
                 if x:
                     text += " " + time.ctime(x)
-            print(text)
+            yield text
             count += 1
             if opt.show_n and count == opt.show_n:
                 return
@@ -664,7 +719,8 @@ def hash_db_con_cur(dbpath):
     cur = con.cursor()
     if not existed:
         cur.execute(
-            "create table hash (" "filepath text, st_size int, st_mtime int, hash text)"
+            "create table hash ("
+            "filepath text, st_size int, st_mtime int, hash text)"
         )
         cur.execute(
             "create unique index hash_filepath_idx on "
@@ -700,7 +756,9 @@ def find_hash(dbpath, filepath, fileinfo, no_hash=False):
     if hashtext or no_hash:
         return hashtext or "no-hash"
 
-    def callback(read, filepath=filepath, fileinfo=fileinfo, __last=[time.time()]):
+    def callback(
+        read, filepath=filepath, fileinfo=fileinfo, __last=[time.time()]
+    ):
         if time.time() - __last[0] > 10:
             pct = 100 * read / fileinfo.st_size
             print(f"{filepath}: {read:,d}/{fileinfo.st_size:,d} {pct:.1f}%")
@@ -846,7 +904,9 @@ def get_info_hash(fileinfo):
     :rtype: str
     """
 
-    return sha1(str([fileinfo.name, fileinfo.st_size]).encode("utf8")).hexdigest()
+    return sha1(
+        str([fileinfo.name, fileinfo.st_size]).encode("utf8")
+    ).hexdigest()
 
 
 def get_list_hash(hash_list):
@@ -867,7 +927,10 @@ def variants_add_hashes(opt, paths):
     for path, fileinfo in paths:
         filepath = os.path.join(path, fileinfo.name)
         hashtext = find_hash(
-            opt.hash_db, filepath, fileinfo, no_hash=opt.dupes_no_hash,
+            opt.hash_db,
+            filepath,
+            fileinfo,
+            no_hash=opt.dupes_no_hash,
         )
         ans.append((path, fileinfo, hashtext[:7] + " "))
     return ans
@@ -895,18 +958,21 @@ def variants(opt):
             print(f"    {size:,d} ")
             paths = variants_add_hashes(opt, paths)
             for path, fileinfo, hash in paths:
-                print(f"        {hash}{timestamp_text(fileinfo.st_ctime)} {path}")
+                print(
+                    f"        {hash}{timestamp_text(fileinfo.st_ctime)} {path}"
+                )
 
 
 @mode
 def folderstats_pkg(opt):
     """Recursively pull stats for all folders within an input path
-    using the folderstats package. This package works fast due to recursion 
+    using the folderstats package. This package works fast due to recursion
     and handles long paths (Windows limitation) through the use of os.scandir.
-    
-    Links: 
+
+    Links:
         https://github.com/njanakiev/folderstats
-        https://bugs.python.org/issue33105 (see msg314126 Author: Eryk Sun (eryksun) Date: 2018-03-20 01:12)
+        https://bugs.python.org/issue33105 (see msg314126 Author: Eryk Sun (eryksun)
+        Date: 2018-03-20 01:12)
 
     :param argparse.Namespace opt: command line options
     :return: pandas dataframe of folderstats output
