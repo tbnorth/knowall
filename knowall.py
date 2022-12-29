@@ -98,9 +98,7 @@ def make_parser():
         description.append(
             "% 12s: %s" % (mode.__name__, mode.__doc__.split("\n", 1)[0])
         )
-    description.append(
-        "\nSort types [ONLY --mode dirs --sort length IMPLEMENTED]:"
-    )
+    description.append("\nSort types [ONLY --mode dirs --sort length IMPLEMENTED]:")
     for type_, text in SORTS.items():
         description.append(f"{type_:>12}: {text}")
     parser = argparse.ArgumentParser(
@@ -191,8 +189,7 @@ def make_parser():
         )
     parser.add_argument(
         "--show-time",
-        help="Any combination of 'C', 'M', 'A', e.g. MA, times "
-        "to show in file mode",
+        help="Any combination of 'C', 'M', 'A', e.g. MA, times " "to show in file mode",
         metavar="TIMES",
     )
 
@@ -247,23 +244,17 @@ def get_options(args=None):
     for attr in "file", "path":
         regex = getattr(opt, attr + "_filter")
         if regex:
-            setattr(
-                opt, attr + "_filter", re.compile(regex, flags=re.IGNORECASE)
-            )
+            setattr(opt, attr + "_filter", re.compile(regex, flags=re.IGNORECASE))
     # convert time text to time
     for end in "min", "max":
         for type_ in "cma":  # ctime, mtime, atime - create, modify, access
             text = "%s_%stime" % (end, type_)
             if getattr(opt, text):
                 try:
-                    timestamp = int(
-                        (parse(getattr(opt, text)) - EPOCH).total_seconds()
-                    )
+                    timestamp = int((parse(getattr(opt, text)) - EPOCH).total_seconds())
                     setattr(opt, text, timestamp)
                 except Exception:
-                    print(
-                        "Failed parsing %s '%s'" % (text, getattr(opt, text))
-                    )
+                    print("Failed parsing %s '%s'" % (text, getattr(opt, text)))
                     raise
     return opt
 
@@ -298,11 +289,11 @@ def convert_input_file(inFile):
         json.loads(inFile.readline())
         inFile.seek(0)  # Reset back to line 0
         return inFile
-    except:  # If lines aren't JSON, then try CSV
+    except Exception:  # If lines aren't JSON, then try CSV
         try:
             inFile.seek(0)  # Reset back to line 0
             in_dat = pd.read_csv(inFile)
-        except:  # Only allow JSON or CSV input at this time
+        except Exception:  # Only allow JSON or CSV input at this time
             print("...Error...Input file is not JSON or CSV")
             raise
         # Reformat input CSV into JSON format
@@ -347,9 +338,9 @@ def convert_input_file(inFile):
         )
 
         # Get list of directory paths
-        in_dirs = in_dat.loc[in_dat["folder"] == True].copy()
+        in_dirs = in_dat.loc[in_dat["folder"]].copy()
         # Get just files (not directories)
-        in_files = in_dat.loc[in_dat["folder"] == False].copy()
+        in_files = in_dat.loc[~in_dat["folder"]].copy()
         del in_dat
         # Fill nan extension with empty string
         in_files["extension"] = in_files["extension"].fillna("")
@@ -400,9 +391,14 @@ def get_data(opt):
 
     nn = lambda x: x if x is not None else 0
     # Check/Handle Input file Format to JSON
-    sys.stdin = convert_input_file(sys.stdin)
-    for line in sys.stdin:
-        data = json.loads(line)
+    stdin = convert_input_file(sys.stdin)
+    for line in stdin:
+        try:
+            data = json.loads(line)
+        except json.decoder.JSONDecodeError:
+            sys.stderr.write("Rejected for encoding issue:\n")
+            sys.stderr.write(f"{line}\n")
+            continue
         data["files"] = [FileInfo._make(i) for i in data["files"]]
         if opt.path_filter and not opt.path_filter.search(data["path"]):
             continue
@@ -537,19 +533,14 @@ def recur_stat(opt):
         for filename in files:
             filepath = os.path.join(path, filename)
             filepath = path_length_check(filepath)
-            if (
-                filepath
-            ):  # Check if filepath is None (path_length_check failed)
+            if filepath:  # Check if filepath is None (path_length_check failed)
                 count += 1
                 out["files"].append(
-                    tuple([uni(filename)])
-                    + tuple(os.lstat(long_path(filepath)))
+                    tuple([uni(filename)]) + tuple(os.lstat(long_path(filepath)))
                 )
             else:  # hit Windows max path length
                 filepath = os.path.abspath(os.path.join(path, filename))
-                sys.stderr.write(
-                    f"Can't open {len(filepath)} char. path {filepath}\n"
-                )
+                sys.stderr.write(f"Can't open {len(filepath)} char. path {filepath}\n")
                 out["files"].append(tuple([uni(filename)]) + NULLSTAT)
         print(json.dumps(out))
         sys.stderr.write("%d %s\n" % (count, path))
@@ -719,8 +710,7 @@ def hash_db_con_cur(dbpath):
     cur = con.cursor()
     if not existed:
         cur.execute(
-            "create table hash ("
-            "filepath text, st_size int, st_mtime int, hash text)"
+            "create table hash (" "filepath text, st_size int, st_mtime int, hash text)"
         )
         cur.execute(
             "create unique index hash_filepath_idx on "
@@ -756,9 +746,7 @@ def find_hash(dbpath, filepath, fileinfo, no_hash=False):
     if hashtext or no_hash:
         return hashtext or "no-hash"
 
-    def callback(
-        read, filepath=filepath, fileinfo=fileinfo, __last=[time.time()]
-    ):
+    def callback(read, filepath=filepath, fileinfo=fileinfo, __last=[time.time()]):
         if time.time() - __last[0] > 10:
             pct = 100 * read / fileinfo.st_size
             print(f"{filepath}: {read:,d}/{fileinfo.st_size:,d} {pct:.1f}%")
@@ -904,9 +892,7 @@ def get_info_hash(fileinfo):
     :rtype: str
     """
 
-    return sha1(
-        str([fileinfo.name, fileinfo.st_size]).encode("utf8")
-    ).hexdigest()
+    return sha1(str([fileinfo.name, fileinfo.st_size]).encode("utf8")).hexdigest()
 
 
 def get_list_hash(hash_list):
@@ -958,9 +944,7 @@ def variants(opt):
             print(f"    {size:,d} ")
             paths = variants_add_hashes(opt, paths)
             for path, fileinfo, hash in paths:
-                print(
-                    f"        {hash}{timestamp_text(fileinfo.st_ctime)} {path}"
-                )
+                print(f"        {hash}{timestamp_text(fileinfo.st_ctime)} {path}")
 
 
 @mode
