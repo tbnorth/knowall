@@ -10,4 +10,4 @@ tests/testfs
 venv*
 
 #Ignore output folder
-output/
+output/tags

@@ -18,6 +18,7 @@ from collections import defaultdict, namedtuple
 from datetime import datetime
 from functools import lru_cache
 from hashlib import sha1
+from types import SimpleNamespace
 
 try:
     import folderstats
@@ -34,7 +35,7 @@ FileInfo = namedtuple(
     "st_gid st_size st_atime st_mtime st_ctime",
 )
 # when windows max file length causes os.lstat() to fail, use this
-NULLSTAT = tuple([None] * 10)  # 10 is list above minus name
+NULLSTAT = tuple([None] * (len(FileInfo._fields) - 1))  # list above minus name
 
 # strings are used as keys for directories in get_hier_db() and
 # dupe_dirs(), so these are non-string keys for non-directory items
@@ -849,6 +850,48 @@ def dupes(opt):
         print(f"{k:>12s}: {v:,d}")
 
 
+def recur(state, node, path):
+    """Use size for initial pass, real hash later."""
+
+    state.path_node[path] = node
+
+    child_hashes = []
+    child_total = 0
+    child_bytes_total = 0
+
+    for key in node:
+        if not isinstance(key, int):
+            child_hash, child_count, child_bytes = recur(
+                state, node[key], os.path.join(path, key)
+            )
+            if child_count:
+                child_hashes.append(child_hash)
+                child_total += child_count
+                child_bytes_total += child_bytes
+    for fileinfo in sorted(node[FILES]):
+        if fileinfo.st_size is None:
+            continue  # happens when Windows path length limit breaks things
+        if mode == "size":
+            child_hashes.append(fileinfo.st_size)
+        else:
+            child_path = os.path.join(path, fileinfo.name)
+            hashtext = find_hash(
+                state.opt.hash_db,
+                child_path[1:],
+                fileinfo,
+                no_hash=state.opt.dupes_no_hash,
+            )
+            child_hashes.append(hashtext)
+        child_total += 1
+        child_bytes_total += fileinfo.st_size
+    node[CHILD_HASH] = get_list_hash(child_hashes)
+    node[CHILD_FILES] = child_total
+    node[CHILD_BYTES] = child_bytes_total
+    state.hashes[(child_bytes_total, node[CHILD_HASH])].append(path)
+
+    return node[CHILD_HASH], child_total, child_bytes_total
+
+
 @mode
 def dupe_dirs(opt):
     """Find duplicate dirs., list from largest to smallest
@@ -856,62 +899,41 @@ def dupe_dirs(opt):
     :param argparse.Namespace opt: command line options
     """
 
+    state = SimpleNamespace()
+    state.opt = opt
+    state.mode = "size"
+    state.hashes = defaultdict(lambda: list())
+    state.path_node = {}
+
     db = get_hier_db(opt)
-    hashes = defaultdict(lambda: list())
 
-    def recur(node, path):
+    recur(state, db, "/")
+    state.mode = "hash"  # For subsequent calls
 
-        child_hashes = []
-        child_total = 0
-        child_bytes_total = 0
-
-        for key in node:
-            if not isinstance(key, int):
-                child_hash, child_count, child_bytes = recur(
-                    node[key], os.path.join(path, key)
-                )
-                if child_count:
-                    child_hashes.append(child_hash)
-                    child_total += child_count
-                    child_bytes_total += child_bytes
-        for fileinfo in sorted(node[FILES]):
-            if fileinfo.st_size is None:
-                continue  # happens when Windows path length limit breaks things
-            child_hashes.append(get_info_hash(fileinfo))
-            child_total += 1
-            child_bytes_total += fileinfo.st_size
-        node[CHILD_HASH] = get_list_hash(child_hashes)
-        node[CHILD_FILES] = child_total
-        node[CHILD_BYTES] = child_bytes_total
-        hashes[(child_bytes_total, node[CHILD_HASH])].append(path)
-
-        return node[CHILD_HASH], child_total, child_bytes_total
-
-    recur(db, "/")
-
-    hash_sizes = sorted(hashes, reverse=True)
+    hash_sizes = sorted(state.hashes, reverse=True)
     shown = 0
+    seen = set()
     for size, child_hash in hash_sizes:
-        if len(hashes[(size, child_hash)]) < 2:
+        if len(state.hashes[(size, child_hash)]) < 2:
             continue
-        print(f"{size:,}")
-        for i in hashes[(size, child_hash)]:
-            print(i)
+        # Get actual hash for each in list
+        size_hashes = defaultdict(list)
+        for path in list(state.hashes[(size, child_hash)]):
+            if any(path.startswith(i) for i in seen):
+                continue
+            path_hash, _, _ = recur(state, state.path_node[path], path)
+            size_hashes[path_hash].append(path)
+        for hash, paths in size_hashes.items():
+            if len(paths) < 2:
+                continue
+            print(f"{size:,}")
+            for i in paths:
+                print(i)
+                seen.add(i)
+            print()
         shown += 1
-        print()
         if opt.show_n and shown >= opt.show_n:
             break
-
-
-def get_info_hash(fileinfo):
-    """get_info_hash - get a hash for a fileinfo
-
-    :param list fileinfo: a list of file info parts
-    :return: a hash
-    :rtype: str
-    """
-
-    return sha1(str([fileinfo.name, fileinfo.st_size]).encode("utf8")).hexdigest()
 
 
 def get_list_hash(hash_list):

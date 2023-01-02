@@ -71,7 +71,7 @@ def test_default(top_dir):
     """Test creation of output file"""
     print(top_dir)
     out = run_args(path_in=None)
-    path = os_path("testfs/gjuziyvlz/eoebtos/acvvqpvhuqkllvwlhs/v/judgkpoddlhw")
+    path = os_path("testfs/u/t/pdwjhvffkchm/xoogtbhppacj/pbinlyqritejwnlvzmgp")
     print(path)
     assert f'{{"path": "{path}", ' '"files": []}' in out
     with Path(TEST_DATA).open("w") as test_data:
@@ -82,7 +82,7 @@ def test_dupes():
     Path(TEST_DB).unlink(missing_ok=True)
     out = run_args(["--mode", "dupes"])
     assert not Path(TEST_DB).exists()
-    assert "files: 8" in out
+    assert "files: 330" in out
 
 
 def test_dupes_w_db_no_hash():
@@ -109,8 +109,8 @@ def test_dupes_w_db():
     out = run_args(["--mode", "dupes", "--hash-db", TEST_DB])
     assert Path(TEST_DB).exists()
     print(list(Path().glob("*")))
-    assert "files: 8" in out
-    assert (len(list(query_hash_db("select * from hash")))) == 16
+    assert "files: 330" in out
+    assert (len(list(query_hash_db("select * from hash")))) == 3038
 
 
 def hier_test(_):
@@ -123,7 +123,14 @@ def hier_test(_):
 
 def test_get_hier_db(mocker):
     mocker.patch("knowall.get_data", new=hier_test)
-    print(knowall.get_hier_db(None))
+    hier = knowall.get_hier_db(None)
+    print(hier)
+    assert len(hier) == 2  # FILES + 'a'
+    assert len(hier["a"]) == 2  # FILES + 'b'
+    assert len(hier["a"]["b"]) == 2  # FILES + 'c'
+    assert len(hier["a"]["b"]["c"]) == 1  # FILES
+    assert hier["a"]["b"]["c"][knowall.FILES] == ["z", "y"]
+    assert hier["a"][knowall.FILES] == ["x", "y"]
 
     # def test_files():
     #     # FIXME: make test test something
@@ -170,7 +177,7 @@ def test_dirs():
 def test_summary():
     # FIXME: make test test something
     out = run_args(["--mode", "summary"])
-    assert out == "27 folders, 96 files, 5,474,741 bytes, no stats. 0\n"
+    assert out == "2,435 folders, 3,184 files, 1,589,966 bytes, no stats. 0\n"
 
     # def test_find_ext():
     #     # FIXME: make test test something
