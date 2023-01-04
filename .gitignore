@@ -11,3 +11,4 @@ venv*
 
 #Ignore output folder
 output/tags
+tags

@@ -753,7 +753,7 @@ def find_hash(dbpath, filepath, fileinfo, no_hash=False):
     if con:
         cur.execute(
             "select hash from hash where filepath = ? "
-            " and st_size = ? and st_mtime = ?",
+            "and st_size = ? and st_mtime = ?",
             [filepath, fileinfo.st_size, fileinfo.st_mtime],
         )
         hashtexts = cur.fetchall()
@@ -871,13 +871,13 @@ def recur(state, node, path):
     for fileinfo in sorted(node[FILES]):
         if fileinfo.st_size is None:
             continue  # happens when Windows path length limit breaks things
-        if mode == "size":
+        if state.mode == "size":
             child_hashes.append(fileinfo.st_size)
         else:
             child_path = os.path.join(path, fileinfo.name)
             hashtext = find_hash(
                 state.opt.hash_db,
-                child_path[1:],
+                child_path,
                 fileinfo,
                 no_hash=state.opt.dupes_no_hash,
             )
